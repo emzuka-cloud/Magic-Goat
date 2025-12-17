@@ -1,0 +1,21 @@
+export type RootStackParamList = {
+    Splash: undefined;
+    Auth: undefined;
+    VerifyEmail: { email: string; username: string };
+    Home: undefined;
+    PlayGroups: undefined;
+    Notifications: undefined;
+    Profile: undefined;
+    Support: undefined;
+    LeagueList: undefined;
+    CreateLeague: undefined;
+    LeagueDetail: { id: string };
+    TournamentDetail: { id: string };
+    Game: undefined;
+    Invitations: undefined;
+    PlayGroupsList: undefined;
+    CreatePlayGroup: undefined;
+    PlayGroupDetail: { id: string };
+    TournamentList: undefined;
+    CreateTournament: undefined;
+};
