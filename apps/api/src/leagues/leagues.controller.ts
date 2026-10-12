@@ -25,13 +25,15 @@ export class LeaguesController {
 
     @UseGuards(AuthGuard('jwt'))
     @Patch(':id')
-    update(@Param('id') id: string, @Body() updateLeagueDto: any) {
+    async update(@Param('id') id: string, @Body() updateLeagueDto: any, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.update(id, updateLeagueDto);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Delete(':id')
-    remove(@Param('id') id: string) {
+    async remove(@Param('id') id: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.remove(id);
     }
 
@@ -42,19 +44,22 @@ export class LeaguesController {
 
     @UseGuards(AuthGuard('jwt'))
     @Patch(':id/standings/:userId')
-    updateStanding(@Param('id') id: string, @Param('userId') userId: string, @Body() updates: any) {
+    async updateStanding(@Param('id') id: string, @Param('userId') userId: string, @Body() updates: any, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.updateStanding(id, userId, updates);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/members')
-    addMember(@Param('id') id: string, @Body() body: { userId?: string; username?: string }) {
+    async addMember(@Param('id') id: string, @Body() body: { userId?: string; username?: string }, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.addMember(id, body.userId || body.username || '');
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Delete(':id/members/:userId')
-    removeMember(@Param('id') id: string, @Param('userId') userId: string) {
+    async removeMember(@Param('id') id: string, @Param('userId') userId: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.removeMember(id, userId);
     }
 
@@ -66,7 +71,8 @@ export class LeaguesController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/groups')
-    addGroup(@Param('id') id: string, @Body() body: { groupId: string }) {
+    async addGroup(@Param('id') id: string, @Body() body: { groupId: string }, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
         return this.leaguesService.addPlayGroup(id, body.groupId);
     }
 }

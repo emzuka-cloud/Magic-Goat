@@ -4,9 +4,12 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Shield, User, Trash2 } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type PlayGroupDetailRouteProp = RouteProp<RootStackParamList, 'PlayGroupDetail'>;
 type PlayGroupDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlayGroupDetail'>;
@@ -28,6 +31,7 @@ export const PlayGroupDetailScreen = () => {
     const [group, setGroup] = useState<PlayGroup | null>(null);
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
+    const { players: myPlayers } = useMyPlayGroups(modalVisible);
     const [newMemberId, setNewMemberId] = useState('');
     const [addingMember, setAddingMember] = useState(false);
 
@@ -40,11 +44,12 @@ export const PlayGroupDetailScreen = () => {
             const headers = await getAuthHeaders();
             const response = await fetch(`${API_URL}/playgroups/${id}`, { headers });
             if (response.ok) {
-                const data = await response.json();
-                setGroup(data);
+                setGroup(await response.json());
+            } else {
+                await showApiError(response, 'Could not load this play group.');
             }
         } catch (error) {
-            console.error('Fetch detail error:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }
@@ -65,18 +70,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     fetchGroupDetails();
                 } else {
-                    if (Platform.OS === 'web') {
-                        window.alert('Error: Failed to remove member');
-                    } else {
-                        Alert.alert('Error', 'Failed to remove member');
-                    }
+                    await showApiError(response, 'Could not remove the member.');
                 }
             } catch (e) {
-                if (Platform.OS === 'web') {
-                    window.alert('Error: Failed to remove member');
-                } else {
-                    Alert.alert('Error', 'Failed to remove member');
-                }
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -111,10 +108,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     navigation.navigate('PlayGroups');
                 } else {
-                    Alert.alert('Error', 'Failed to delete group');
+                    await showApiError(response, 'Could not delete the play group.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'An error occurred');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -155,10 +152,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     navigation.goBack();
                 } else {
-                    Alert.alert('Error', 'Failed to leave group');
+                    await showApiError(response, 'Could not leave the play group.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'An error occurred');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -196,10 +193,10 @@ export const PlayGroupDetailScreen = () => {
                 setModalVisible(false);
                 fetchGroupDetails();
             } else {
-                Alert.alert('Error', 'Failed to add member. Check username/ID.');
+                await showApiError(response, 'Could not add the member. Check the username, email or ID.');
             }
         } catch (error) {
-            Alert.alert('Error', 'An error occurred.');
+            showError(NETWORK_ERROR);
         } finally {
             setAddingMember(false);
         }
@@ -312,7 +309,16 @@ export const PlayGroupDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Member</Text>
-                            <Text style={styles.modalSubtitle}>Enter Username or ID</Text>
+                            <Text style={styles.modalSubtitle}>Pick someone from your other play groups, or type a username, email or user ID</Text>
+                            <Dropdown
+                                placeholder="Pick a player"
+                                emptyText="No players in your other play groups yet."
+                                options={myPlayers
+                                    .filter(m => !group?.members.some(g => g.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={newMemberId || null}
+                                onChange={setNewMemberId}
+                            />
 
                             <TextInput
                                 style={styles.modalInput}

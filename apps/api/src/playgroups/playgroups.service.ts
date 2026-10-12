@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PlayGroup } from './playgroups.entity';
@@ -17,55 +17,21 @@ export class PlayGroupsService {
         private notificationsService: NotificationsService,
     ) { }
 
-    async create(createPlayGroupDto: { name: string; description?: string; ownerId?: string; ownerUsername?: string; ownerEmail?: string }): Promise<PlayGroup> {
-        const { name, description, ownerId, ownerUsername, ownerEmail } = createPlayGroupDto;
+    async create(createPlayGroupDto: { name: string; description?: string }, owner: User): Promise<PlayGroup> {
+        const playGroup = this.playGroupsRepository.create({
+            name: createPlayGroupDto.name,
+            description: createPlayGroupDto.description,
+            owner,
+            ownerId: owner.id,
+            members: [owner],
+        });
+        return this.playGroupsRepository.save(playGroup);
+    }
 
-        let owner: User | null = null;
-
-        try {
-            // Try finding by ID first if provided
-            if (ownerId && ownerId.length > 10) {
-                owner = await this.usersRepository.findOneBy({ id: ownerId });
-            }
-
-            // If not found, try username
-            if (!owner && ownerUsername) {
-                owner = await this.usersRepository.findOneBy({ username: ownerUsername });
-            }
-
-            // If not found, try email
-            if (!owner && ownerEmail) {
-                owner = await this.usersRepository.findOneBy({ email: ownerEmail });
-            }
-
-            // If still not found, and we have email/username, create the user!
-            if (!owner && ownerUsername && ownerEmail) {
-                console.log(`Creating new user for playgroup owner: ${ownerUsername}`);
-                owner = this.usersRepository.create({
-                    username: ownerUsername,
-                    email: ownerEmail,
-                });
-                owner = await this.usersRepository.save(owner);
-            }
-
-            if (!owner) {
-                console.error('Owner not found and creation failed');
-                throw new NotFoundException('Owner not found and could not be created');
-            }
-
-            const playGroup = this.playGroupsRepository.create({
-                name,
-                description,
-                owner,
-                ownerId: owner.id,
-                members: [owner],
-            });
-
-            return await this.playGroupsRepository.save(playGroup);
-        } catch (error) {
-            console.error('Error creating playgroup:', error);
-            throw error;
-        }
+    async assertOwner(groupId: string, userId: string): Promise<void> {
+        const group = await this.playGroupsRepository.findOne({ where: { id: groupId } });
+        if (!group) throw new NotFoundException(`PlayGroup with ID ${groupId} not found`);
+        if (group.ownerId !== userId) throw new ForbiddenException('Only the play group owner can do this.');
     }
 
     async findAllForUser(identifier: string): Promise<PlayGroup[]> {
@@ -152,7 +118,6 @@ export class PlayGroupsService {
         return group;
     }
     async removeMember(groupId: string, memberId: string): Promise<PlayGroup> {
-        console.log('🔍 [removeMember] Called with groupId:', groupId, 'memberId:', memberId);
 
         const group = await this.playGroupsRepository.findOne({
             where: { id: groupId },
@@ -160,18 +125,12 @@ export class PlayGroupsService {
         });
 
         if (!group) {
-            console.log('❌ [removeMember] Play Group not found');
             throw new NotFoundException('Play Group not found');
         }
 
-        console.log('🔍 [removeMember] Group found, current members:', group.members.map(m => ({ id: m.id, username: m.username })));
-
         group.members = group.members.filter(m => m.id !== memberId);
 
-        console.log('✅ [removeMember] After filter, remaining members:', group.members.map(m => ({ id: m.id, username: m.username })));
-
         const saved = await this.playGroupsRepository.save(group);
-        console.log('✅ [removeMember] Group saved');
 
         return saved;
     }

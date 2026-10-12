@@ -1,43 +1,29 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
-import { useAuth } from '../contexts/AuthContext';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { ArrowLeft } from 'lucide-react-native';
-import { fetchUserAttributes } from 'aws-amplify/auth';
 
 type CreatePlayGroupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreatePlayGroup'>;
 
 export const CreatePlayGroupScreen = () => {
     const navigation = useNavigation<CreatePlayGroupScreenNavigationProp>();
-    const { user } = useAuth();
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleCreate = async () => {
         if (!name.trim()) {
-            Alert.alert('Error', 'Please enter a group name');
+            showError('Please enter a group name');
             return;
         }
 
         setLoading(true);
         try {
             const headers = await getAuthHeaders();
-            const username = user?.username;
-
-            // Fetch email if possible
-            let email = user?.signInDetails?.loginId;
-            if (!email) {
-                try {
-                    const attrs = await fetchUserAttributes();
-                    email = attrs.email;
-                } catch (e) {
-                    console.log('Error fetching email', e);
-                }
-            }
 
             const response = await fetch(`${API_URL}/playgroups`, {
                 method: 'POST',
@@ -45,8 +31,6 @@ export const CreatePlayGroupScreen = () => {
                 body: JSON.stringify({
                     name,
                     description,
-                    ownerUsername: username,
-                    ownerEmail: email
                 }),
             });
 
@@ -56,11 +40,10 @@ export const CreatePlayGroupScreen = () => {
                 // For simplicity, just go back.
                 navigation.goBack();
             } else {
-                throw new Error('Failed to create group');
+                await showApiError(response, 'Could not create the play group.');
             }
         } catch (error) {
-            console.error('Create group error:', error);
-            Alert.alert('Error', 'Failed to create play group');
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }

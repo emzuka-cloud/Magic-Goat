@@ -19,8 +19,8 @@ export class NotificationsController {
     }
 
     @Patch(':id/read')
-    async markAsRead(@Param('id') id: string) {
-        return this.notificationsService.markAsRead(id);
+    async markAsRead(@Param('id') id: string, @Request() req: any) {
+        return this.notificationsService.markAsRead(id, req.user.id);
     }
 
     @Patch('read-all')
@@ -29,7 +29,7 @@ export class NotificationsController {
     }
 
     @Delete(':id')
-    async remove(@Param('id') id: string) {
-        return this.notificationsService.remove(id);
+    async remove(@Param('id') id: string, @Request() req: any) {
+        return this.notificationsService.remove(id, req.user.id);
     }
 }

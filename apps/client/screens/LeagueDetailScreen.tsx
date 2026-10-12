@@ -5,8 +5,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
+import { formatDateOnly } from '../utils/dates';
 import { useAuth, getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2 } from 'lucide-react-native';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -43,6 +47,7 @@ export const LeagueDetailScreen = () => {
     const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
     const [editStandingModalVisible, setEditStandingModalVisible] = useState(false);
     const [newMemberId, setNewMemberId] = useState('');
+    const { players: myPlayers } = useMyPlayGroups(addMemberModalVisible);
     const [addingMember, setAddingMember] = useState(false);
     const [editingStanding, setEditingStanding] = useState(false);
 
@@ -73,6 +78,8 @@ export const LeagueDetailScreen = () => {
             if (leagueResponse.ok) {
                 const leagueData = await leagueResponse.json();
                 setLeague(leagueData);
+            } else {
+                await showApiError(leagueResponse, 'Could not load this league.');
             }
 
             if (standingsResponse.ok) {
@@ -80,7 +87,7 @@ export const LeagueDetailScreen = () => {
                 setStandings(standingsData);
             }
         } catch (error) {
-            console.error('Failed to fetch league details:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -118,15 +125,10 @@ export const LeagueDetailScreen = () => {
                 setAddMemberModalVisible(false);
                 fetchLeagueDetails();
             } else {
-                const message = 'Failed to add member. User not found.';
-                if (Platform.OS === 'web') {
-                    window.alert(message);
-                } else {
-                    Alert.alert('Error', message);
-                }
+                await showApiError(response, 'Could not add the member. Check the username, email or ID.');
             }
         } catch (error) {
-            console.error('Add member error:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setAddingMember(false);
         }
@@ -169,15 +171,10 @@ export const LeagueDetailScreen = () => {
                 setEditStandingModalVisible(false);
                 fetchLeagueDetails();
             } else {
-                const message = 'Failed to update standing';
-                if (Platform.OS === 'web') {
-                    window.alert(message);
-                } else {
-                    Alert.alert('Error', message);
-                }
+                await showApiError(response, 'Could not update the standing.');
             }
         } catch (error) {
-            console.error('Update standing error:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setEditingStanding(false);
         }
@@ -197,15 +194,10 @@ export const LeagueDetailScreen = () => {
                 if (response.ok) {
                     fetchLeagueDetails();
                 } else {
-                    const message = 'Failed to remove member';
-                    if (Platform.OS === 'web') {
-                        window.alert(message);
-                    } else {
-                        Alert.alert('Error', message);
-                    }
+                    await showApiError(response, 'Could not remove the member.');
                 }
             } catch (e) {
-                console.error('Remove member error:', e);
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -239,15 +231,10 @@ export const LeagueDetailScreen = () => {
                 if (response.ok) {
                     navigation.goBack();
                 } else {
-                    const message = 'Failed to delete league';
-                    if (Platform.OS === 'web') {
-                        window.alert(message);
-                    } else {
-                        Alert.alert('Error', message);
-                    }
+                    await showApiError(response, 'Could not delete the league.');
                 }
             } catch (e) {
-                console.error('Delete league error:', e);
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -287,15 +274,10 @@ export const LeagueDetailScreen = () => {
                 if (response.ok) {
                     navigation.goBack();
                 } else {
-                    const message = 'Failed to leave league';
-                    if (Platform.OS === 'web') {
-                        window.alert(message);
-                    } else {
-                        Alert.alert('Error', message);
-                    }
+                    await showApiError(response, 'Could not leave the league.');
                 }
             } catch (e) {
-                console.error('Leave league error:', e);
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -361,7 +343,7 @@ export const LeagueDetailScreen = () => {
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.headerTitle}>{league.name}</Text>
-                            <Text style={styles.headerSubtitle}>Started: {new Date(league.start_date).toLocaleDateString()}</Text>
+                            <Text style={styles.headerSubtitle}>Started: {formatDateOnly(league.start_date)}</Text>
                         </View>
                     </View>
                 </View>
@@ -458,7 +440,17 @@ export const LeagueDetailScreen = () => {
                                 </TouchableOpacity>
                             </View>
 
-                            <Text style={styles.modalLabel}>Username or ID</Text>
+                            <Text style={styles.modalLabel}>From your play groups</Text>
+                            <Dropdown
+                                placeholder="Pick a player"
+                                emptyText="No players in your play groups yet. Type a name below."
+                                options={myPlayers
+                                    .filter(m => !standings.some(s => s.user.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={newMemberId || null}
+                                onChange={setNewMemberId}
+                            />
+                            <Text style={styles.modalLabel}>Or type a username, email or user ID</Text>
                             <TextInput
                                 style={styles.modalInput}
                                 value={newMemberId}

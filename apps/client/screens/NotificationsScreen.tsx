@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Platform, St
 import { useNavigation } from '@react-navigation/native';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { API_URL } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { Ionicons } from '@expo/vector-icons';
 import { Trash2, ArrowLeft, Bell } from 'lucide-react-native';
 
@@ -34,11 +35,12 @@ export const NotificationsScreen = () => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setNotifications(data);
+                setNotifications(await response.json());
+            } else {
+                await showApiError(response, 'Could not load notifications.');
             }
         } catch (error) {
-            console.error('Error fetching notifications:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }
@@ -49,19 +51,20 @@ export const NotificationsScreen = () => {
             const session = await fetchAuthSession();
             const token = session.tokens?.idToken?.toString();
 
-            await fetch(`${API_URL}/notifications/${id}/read`, {
+            const response = await fetch(`${API_URL}/notifications/${id}/read`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
             });
+            if (!response.ok) return showApiError(response, 'Could not mark the notification as read.');
 
             // Update local state
             setNotifications(prev => prev.map(n =>
                 n.id === id ? { ...n, isRead: true } : n
             ));
         } catch (error) {
-            console.error('Error marking as read:', error);
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -85,9 +88,11 @@ export const NotificationsScreen = () => {
 
             if (response.ok) {
                 setNotifications(prev => prev.filter(n => n.id !== id));
+            } else {
+                await showApiError(response, 'Could not delete the notification.');
             }
         } catch (error) {
-            console.error('Error deleting notification:', error);
+            showError(NETWORK_ERROR);
         }
     };
 

@@ -4,6 +4,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Trophy, ArrowRight, ArrowLeft } from 'lucide-react-native';
 
@@ -33,11 +34,12 @@ export const TournamentListScreen = () => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setTournaments(data);
+                setTournaments(await response.json());
+            } else {
+                await showApiError(response, 'Could not load your tournaments.');
             }
         } catch (error) {
-            console.error('Failed to fetch tournaments', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);

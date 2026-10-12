@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tournament, TournamentFormat, TournamentStatus } from './entities/tournament.entity';
@@ -31,7 +31,11 @@ export class TournamentsService {
         private notificationsService: NotificationsService,
     ) { }
 
-    // ... create, findAll ...
+    async assertOwner(tournamentId: string, userId: string): Promise<void> {
+        const tournament = await this.tournamentsRepository.findOne({ where: { id: tournamentId }, relations: ['created_by'] });
+        if (!tournament) throw new NotFoundException(`Tournament with ID ${tournamentId} not found`);
+        if (tournament.created_by?.id !== userId) throw new ForbiddenException('Only the tournament owner can do this.');
+    }
 
     async addParticipant(tournamentId: string, identifier: string): Promise<TournamentParticipant> {
         const tournament = await this.findOne(tournamentId);
@@ -39,7 +43,7 @@ export class TournamentsService {
         // Check capacity
         const count = await this.participantsRepository.count({ where: { tournament: { id: tournamentId } } });
         if (count >= (tournament.capacity || 8)) {
-            throw new Error('Tournament is full');
+            throw new BadRequestException('This tournament is full.');
         }
 
         let user: User | null = null;
@@ -151,7 +155,7 @@ export class TournamentsService {
         // Check capacity
         const count = await this.participantsRepository.count({ where: { tournament: { id } } });
         if (count >= tournament.capacity) {
-            throw new Error('Tournament is full');
+            throw new BadRequestException('This tournament is full.');
         }
 
         const participant = this.participantsRepository.create({
@@ -169,7 +173,7 @@ export class TournamentsService {
 
         const currentCount = await this.participantsRepository.count({ where: { tournament: { id: tournamentId } } });
         if (currentCount + group.members.length > tournament.capacity) {
-            throw new Error('Not enough space in tournament for this group');
+            throw new BadRequestException('Not enough space in this tournament for the whole group.');
         }
 
         for (const member of group.members) {
@@ -216,6 +220,51 @@ export class TournamentsService {
         });
     }
 
+    /**
+     * Single-elimination: auto-win matches whose opponent slot can never be filled (a BYE, or a
+     * feeder match with nobody in it) and move every decided winner into the next round.
+     */
+    // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    private async resolveByes(tournamentId: string, format: TournamentFormat): Promise<void> {
+        if (format === TournamentFormat.COMMANDER) return; // ponytail: 4-player pods advance 2 players; not handled here
+        const pairings = await this.pairingsRepository.find({
+            where: { tournament: { id: tournamentId } },
+            relations: ['player1', 'player2'],
+            order: { round: 'ASC', order: 'ASC' },
+        });
+        const at = (round: number, order: number) => pairings.find(p => p.round === round && p.order === order);
+        const slotEmptyForever = (p: Pairing, slot: 0 | 1): boolean => {
+            if (slot === 0 ? p.player1 : p.player2) return false;
+            if (p.round === 1) return true;
+            const feeder = at(p.round - 1, p.order * 2 + slot);
+            return !feeder || (slotEmptyForever(feeder, 0) && slotEmptyForever(feeder, 1));
+        };
+
+        const changed = new Set<Pairing>();
+        for (const p of pairings) {
+            if (p.result === PairingResult.PENDING) {
+                if (p.player1 && !p.player2 && slotEmptyForever(p, 1)) p.result = PairingResult.P1_WIN;
+                else if (p.player2 && !p.player1 && slotEmptyForever(p, 0)) p.result = PairingResult.P2_WIN;
+                if (p.result !== PairingResult.PENDING) changed.add(p);
+            }
+            const winner = p.result === PairingResult.P1_WIN ? p.player1 : p.result === PairingResult.P2_WIN ? p.player2 : null;
+            const next = at(p.round + 1, Math.floor(p.order / 2));
+            const slot = p.order % 2 === 0 ? 'player1' : 'player2';
+            if (winner && next && next[slot]?.id !== winner.id) {
+                next[slot] = winner;
+                changed.add(next);
+            }
+        }
+        if (changed.size) await this.pairingsRepository.save([...changed]);
+
+        // The tournament is complete once the final (the only match with no next round) has a winner.
+        const final = pairings[pairings.length - 1];
+        if (final) {
+            const done = final.result === PairingResult.P1_WIN || final.result === PairingResult.P2_WIN;
+            await this.tournamentsRepository.update(tournamentId, { status: done ? TournamentStatus.COMPLETED : TournamentStatus.ACTIVE });
+        }
+    }
+
     async generateBracket(tournamentId: string): Promise<Pairing[]> {
         const tournament = await this.findOne(tournamentId);
         const capacity = tournament.capacity || 8;
@@ -230,7 +279,7 @@ export class TournamentsService {
         // For MVP, simplistic check. Ideally fill with Byes.
         const minPlayers = isCommander ? 4 : 2;
         if (participants.length < minPlayers) {
-            throw new Error('Not enough players to start');
+            throw new BadRequestException('Not enough players to start this tournament.');
         }
 
         // 2. Shuffle Players
@@ -326,6 +375,8 @@ export class TournamentsService {
         tournament.status = TournamentStatus.ACTIVE as any; // Cast if enum mismatch
         await this.tournamentsRepository.save(tournament);
 
+        await this.resolveByes(tournamentId, tournament.format);
+
         // Emit
         for (const p of finalPairings) {
             this.eventsGateway.server.to(`tournament_${tournamentId}`).emit('pairing_created', p);
@@ -350,7 +401,7 @@ export class TournamentsService {
         });
 
         if (participants.length < 2) {
-            throw new Error('Not enough players to generate pairings');
+            throw new BadRequestException('At least 2 players are needed to generate pairings.');
         }
 
         const existingPairings = await this.pairingsRepository.find({
@@ -408,14 +459,23 @@ export class TournamentsService {
         return newPairings;
     }
 
-    async updatePairingResult(pairingId: string, result: string): Promise<Pairing> {
+    async updatePairingResult(tournamentId: string, pairingId: string, result: string): Promise<Pairing> {
         const pairing = await this.pairingsRepository.findOne({
-            where: { id: pairingId },
+            where: { id: pairingId, tournament: { id: tournamentId } },
             relations: ['tournament', 'next_pairing', 'player1', 'player2', 'player3', 'player4']
         });
 
         if (!pairing) {
-            throw new NotFoundException(`Pairing with ID ${pairingId} not found`);
+            throw new NotFoundException('This match was not found in this tournament.');
+        }
+
+        if (pairing.tournament.format !== TournamentFormat.COMMANDER) {
+            if (result !== PairingResult.P1_WIN && result !== PairingResult.P2_WIN) {
+                throw new BadRequestException('A match result must be a win for player 1 or player 2.');
+            }
+            if (!(result === PairingResult.P1_WIN ? pairing.player1 : pairing.player2)) {
+                throw new BadRequestException('There is no player in that slot to win this match.');
+            }
         }
 
         pairing.result = result as any;
@@ -459,6 +519,7 @@ export class TournamentsService {
             }
         }
 
+        await this.resolveByes(pairing.tournament.id, pairing.tournament.format);
         this.eventsGateway.server.to(`tournament_${pairing.tournament.id}`).emit('result_updated', pairing);
 
         return pairing;
@@ -608,7 +669,7 @@ export class TournamentsService {
         }
 
         if (invitation.invitee.id !== user.id) {
-            throw new Error('Unauthorized');
+            throw new ForbiddenException('This invitation was sent to another user.');
         }
 
         invitation.status = InvitationStatus.ACCEPTED;
@@ -636,7 +697,7 @@ export class TournamentsService {
         }
 
         if (invitation.invitee.id !== user.id) {
-            throw new Error('Unauthorized');
+            throw new ForbiddenException('This invitation was sent to another user.');
         }
 
         invitation.status = InvitationStatus.DECLINED;
