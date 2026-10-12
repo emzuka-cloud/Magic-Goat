@@ -1,6 +1,6 @@
 # Project Context (for picking up work)
 
-Last session: 2026-10-12. Branch `security-fixes` (4 commits ahead of `main`, **not pushed**).
+Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, **not pushed**; see `git log main..security-fixes`).
 
 ## What this is
 
