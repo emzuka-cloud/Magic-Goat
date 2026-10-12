@@ -8,6 +8,8 @@ import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Shield, User, Trash2 } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type PlayGroupDetailRouteProp = RouteProp<RootStackParamList, 'PlayGroupDetail'>;
 type PlayGroupDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlayGroupDetail'>;
@@ -29,6 +31,7 @@ export const PlayGroupDetailScreen = () => {
     const [group, setGroup] = useState<PlayGroup | null>(null);
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
+    const { players: myPlayers } = useMyPlayGroups(modalVisible);
     const [newMemberId, setNewMemberId] = useState('');
     const [addingMember, setAddingMember] = useState(false);
 
@@ -306,7 +309,16 @@ export const PlayGroupDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Member</Text>
-                            <Text style={styles.modalSubtitle}>Enter Username or ID</Text>
+                            <Text style={styles.modalSubtitle}>Pick someone from your other play groups, or type a username, email or user ID</Text>
+                            <Dropdown
+                                placeholder="Pick a player"
+                                emptyText="No players in your other play groups yet."
+                                options={myPlayers
+                                    .filter(m => !group?.members.some(g => g.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={newMemberId || null}
+                                onChange={setNewMemberId}
+                            />
 
                             <TextInput
                                 style={styles.modalInput}

@@ -6,8 +6,11 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
+import { formatDateOnly } from '../utils/dates';
 import { useAuth, getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2 } from 'lucide-react-native';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -44,6 +47,7 @@ export const LeagueDetailScreen = () => {
     const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
     const [editStandingModalVisible, setEditStandingModalVisible] = useState(false);
     const [newMemberId, setNewMemberId] = useState('');
+    const { players: myPlayers } = useMyPlayGroups(addMemberModalVisible);
     const [addingMember, setAddingMember] = useState(false);
     const [editingStanding, setEditingStanding] = useState(false);
 
@@ -339,7 +343,7 @@ export const LeagueDetailScreen = () => {
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.headerTitle}>{league.name}</Text>
-                            <Text style={styles.headerSubtitle}>Started: {new Date(league.start_date).toLocaleDateString()}</Text>
+                            <Text style={styles.headerSubtitle}>Started: {formatDateOnly(league.start_date)}</Text>
                         </View>
                     </View>
                 </View>
@@ -436,7 +440,17 @@ export const LeagueDetailScreen = () => {
                                 </TouchableOpacity>
                             </View>
 
-                            <Text style={styles.modalLabel}>Username or ID</Text>
+                            <Text style={styles.modalLabel}>From your play groups</Text>
+                            <Dropdown
+                                placeholder="Pick a player"
+                                emptyText="No players in your play groups yet. Type a name below."
+                                options={myPlayers
+                                    .filter(m => !standings.some(s => s.user.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={newMemberId || null}
+                                onChange={setNewMemberId}
+                            />
+                            <Text style={styles.modalLabel}>Or type a username, email or user ID</Text>
                             <TextInput
                                 style={styles.modalInput}
                                 value={newMemberId}

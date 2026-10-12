@@ -8,6 +8,8 @@ import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -66,6 +68,7 @@ export const TournamentDetailScreen = () => {
 
     const [identifier, setIdentifier] = useState('');
     const [groupId, setGroupId] = useState('');
+    const { groups: myGroups, players: myPlayers } = useMyPlayGroups(addUserModalVisible || addGroupModalVisible);
     const [actionLoading, setActionLoading] = useState(false);
 
     const isOwner = tournament?.created_by.username === user?.username;
@@ -354,6 +357,7 @@ export const TournamentDetailScreen = () => {
         });
 
         const sortedRounds = Array.from(rounds.keys()).sort((a, b) => a - b);
+        rounds.forEach(list => list.sort((a, b) => a.order - b.order));
         const isCommander = tournament?.format === 'commander';
 
         return (
@@ -472,9 +476,19 @@ export const TournamentDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Participant</Text>
+                            <Dropdown
+                                placeholder="Pick a player from your play groups"
+                                emptyText="No other players in your play groups yet. Type a name below."
+                                options={myPlayers
+                                    .filter(m => !tournament?.participants.some(p => p.user?.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={identifier || null}
+                                onChange={setIdentifier}
+                            />
+                            <Text style={styles.orText}>or type a username, email or user ID</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Username or ID"
+                                placeholder="Username, email or U-ID"
                                 placeholderTextColor="#666"
                                 value={identifier}
                                 onChangeText={setIdentifier}
@@ -496,12 +510,12 @@ export const TournamentDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Play Group</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Group ID"
-                                placeholderTextColor="#666"
-                                value={groupId}
-                                onChangeText={setGroupId}
+                            <Dropdown
+                                placeholder="Choose one of your play groups"
+                                emptyText="You don't have any play groups yet."
+                                options={myGroups.map(g => ({ label: g.name, value: g.id, hint: `${g.members?.length ?? 0} members` }))}
+                                value={groupId || null}
+                                onChange={setGroupId}
                             />
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity onPress={() => setAddGroupModalVisible(false)} style={styles.cancelButton}>
@@ -593,6 +607,7 @@ const styles = StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
     modalContent: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#2e1065' },
     modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 },
+    orText: { color: '#888', fontSize: 12, marginBottom: 8 },
     input: { backgroundColor: '#0f0518', color: 'white', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#2e1065', marginBottom: 24 },
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
     cancelButton: { padding: 12 },

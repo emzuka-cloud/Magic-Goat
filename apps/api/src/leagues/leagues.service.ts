@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { League } from './entities/league.entity';
@@ -23,7 +23,17 @@ export class LeaguesService {
         private notificationsService: NotificationsService,
     ) { }
 
+    private assertValidDates(dates: (Date | string | undefined | null)[]) {
+        if (dates.some(d => d != null && isNaN(new Date(d).getTime()))) {
+            throw new BadRequestException('Dates must be valid, in YYYY-MM-DD format.');
+        }
+    }
+
     async create(createLeagueDto: { name: string; description?: string; start_date: Date; end_date?: Date }, user: User): Promise<League> {
+        if (!createLeagueDto.name?.trim() || !createLeagueDto.start_date) {
+            throw new BadRequestException('A league needs a name and a start date.');
+        }
+        this.assertValidDates([createLeagueDto.start_date, createLeagueDto.end_date]);
         const league = this.leaguesRepository.create({
             ...createLeagueDto,
             created_by: user,
@@ -63,6 +73,7 @@ export class LeaguesService {
         const league = await this.findOne(id);
         // Whitelist editable fields; never let the body overwrite id/created_by/relations.
         const { name, description, start_date, end_date } = updateLeagueDto;
+        this.assertValidDates([start_date, end_date]);
         Object.assign(league, Object.fromEntries(
             Object.entries({ name, description, start_date, end_date }).filter(([, v]) => v !== undefined),
         ));
