@@ -4,6 +4,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Plus, Users } from 'lucide-react-native';
 
@@ -27,7 +28,7 @@ export const LeagueListScreen = () => {
         try {
             const token = await getAuthToken();
             if (!token) {
-                console.error('No auth token available');
+                showError('Your session has expired. Please sign in again.');
                 return;
             }
 
@@ -38,13 +39,14 @@ export const LeagueListScreen = () => {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                await showApiError(response, 'Could not load your leagues.');
+                return;
             }
 
             const data = await response.json();
             setLeagues(data);
         } catch (error) {
-            console.error('Failed to fetch leagues:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);

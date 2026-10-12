@@ -4,6 +4,7 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Shield, User, Trash2 } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -40,11 +41,12 @@ export const PlayGroupDetailScreen = () => {
             const headers = await getAuthHeaders();
             const response = await fetch(`${API_URL}/playgroups/${id}`, { headers });
             if (response.ok) {
-                const data = await response.json();
-                setGroup(data);
+                setGroup(await response.json());
+            } else {
+                await showApiError(response, 'Could not load this play group.');
             }
         } catch (error) {
-            console.error('Fetch detail error:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }
@@ -65,18 +67,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     fetchGroupDetails();
                 } else {
-                    if (Platform.OS === 'web') {
-                        window.alert('Error: Failed to remove member');
-                    } else {
-                        Alert.alert('Error', 'Failed to remove member');
-                    }
+                    await showApiError(response, 'Could not remove the member.');
                 }
             } catch (e) {
-                if (Platform.OS === 'web') {
-                    window.alert('Error: Failed to remove member');
-                } else {
-                    Alert.alert('Error', 'Failed to remove member');
-                }
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -111,10 +105,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     navigation.navigate('PlayGroups');
                 } else {
-                    Alert.alert('Error', 'Failed to delete group');
+                    await showApiError(response, 'Could not delete the play group.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'An error occurred');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -155,10 +149,10 @@ export const PlayGroupDetailScreen = () => {
                 if (response.ok) {
                     navigation.goBack();
                 } else {
-                    Alert.alert('Error', 'Failed to leave group');
+                    await showApiError(response, 'Could not leave the play group.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'An error occurred');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -196,10 +190,10 @@ export const PlayGroupDetailScreen = () => {
                 setModalVisible(false);
                 fetchGroupDetails();
             } else {
-                Alert.alert('Error', 'Failed to add member. Check username/ID.');
+                await showApiError(response, 'Could not add the member. Check the username, email or ID.');
             }
         } catch (error) {
-            Alert.alert('Error', 'An error occurred.');
+            showError(NETWORK_ERROR);
         } finally {
             setAddingMember(false);
         }

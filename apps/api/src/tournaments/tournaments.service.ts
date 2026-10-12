@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tournament, TournamentFormat, TournamentStatus } from './entities/tournament.entity';
@@ -31,7 +31,11 @@ export class TournamentsService {
         private notificationsService: NotificationsService,
     ) { }
 
-    // ... create, findAll ...
+    async assertOwner(tournamentId: string, userId: string): Promise<void> {
+        const tournament = await this.tournamentsRepository.findOne({ where: { id: tournamentId }, relations: ['created_by'] });
+        if (!tournament) throw new NotFoundException(`Tournament with ID ${tournamentId} not found`);
+        if (tournament.created_by?.id !== userId) throw new ForbiddenException('Only the tournament owner can do this.');
+    }
 
     async addParticipant(tournamentId: string, identifier: string): Promise<TournamentParticipant> {
         const tournament = await this.findOne(tournamentId);
@@ -39,7 +43,7 @@ export class TournamentsService {
         // Check capacity
         const count = await this.participantsRepository.count({ where: { tournament: { id: tournamentId } } });
         if (count >= (tournament.capacity || 8)) {
-            throw new Error('Tournament is full');
+            throw new BadRequestException('This tournament is full.');
         }
 
         let user: User | null = null;
@@ -151,7 +155,7 @@ export class TournamentsService {
         // Check capacity
         const count = await this.participantsRepository.count({ where: { tournament: { id } } });
         if (count >= tournament.capacity) {
-            throw new Error('Tournament is full');
+            throw new BadRequestException('This tournament is full.');
         }
 
         const participant = this.participantsRepository.create({
@@ -169,7 +173,7 @@ export class TournamentsService {
 
         const currentCount = await this.participantsRepository.count({ where: { tournament: { id: tournamentId } } });
         if (currentCount + group.members.length > tournament.capacity) {
-            throw new Error('Not enough space in tournament for this group');
+            throw new BadRequestException('Not enough space in this tournament for the whole group.');
         }
 
         for (const member of group.members) {
@@ -230,7 +234,7 @@ export class TournamentsService {
         // For MVP, simplistic check. Ideally fill with Byes.
         const minPlayers = isCommander ? 4 : 2;
         if (participants.length < minPlayers) {
-            throw new Error('Not enough players to start');
+            throw new BadRequestException('Not enough players to start this tournament.');
         }
 
         // 2. Shuffle Players
@@ -350,7 +354,7 @@ export class TournamentsService {
         });
 
         if (participants.length < 2) {
-            throw new Error('Not enough players to generate pairings');
+            throw new BadRequestException('At least 2 players are needed to generate pairings.');
         }
 
         const existingPairings = await this.pairingsRepository.find({
@@ -408,14 +412,14 @@ export class TournamentsService {
         return newPairings;
     }
 
-    async updatePairingResult(pairingId: string, result: string): Promise<Pairing> {
+    async updatePairingResult(tournamentId: string, pairingId: string, result: string): Promise<Pairing> {
         const pairing = await this.pairingsRepository.findOne({
-            where: { id: pairingId },
+            where: { id: pairingId, tournament: { id: tournamentId } },
             relations: ['tournament', 'next_pairing', 'player1', 'player2', 'player3', 'player4']
         });
 
         if (!pairing) {
-            throw new NotFoundException(`Pairing with ID ${pairingId} not found`);
+            throw new NotFoundException('This match was not found in this tournament.');
         }
 
         pairing.result = result as any;
@@ -608,7 +612,7 @@ export class TournamentsService {
         }
 
         if (invitation.invitee.id !== user.id) {
-            throw new Error('Unauthorized');
+            throw new ForbiddenException('This invitation was sent to another user.');
         }
 
         invitation.status = InvitationStatus.ACCEPTED;
@@ -636,7 +640,7 @@ export class TournamentsService {
         }
 
         if (invitation.invitee.id !== user.id) {
-            throw new Error('Unauthorized');
+            throw new ForbiddenException('This invitation was sent to another user.');
         }
 
         invitation.status = InvitationStatus.DECLINED;
