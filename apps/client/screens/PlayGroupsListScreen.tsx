@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Users, ArrowRight, ArrowLeft } from 'lucide-react-native';
 
@@ -46,11 +47,12 @@ export const PlayGroupsListScreen = () => {
             });
 
             if (response.ok) {
-                const data = await response.json();
-                setGroups(data);
+                setGroups(await response.json());
+            } else {
+                await showApiError(response, 'Could not load your play groups.');
             }
         } catch (error) {
-            console.error('Failed to fetch play groups', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);

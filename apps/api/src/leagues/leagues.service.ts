@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { League } from './entities/league.entity';
@@ -54,9 +54,18 @@ export class LeaguesService {
         return league;
     }
 
+    async assertOwner(leagueId: string, userId: string): Promise<void> {
+        const league = await this.findOne(leagueId);
+        if (league.created_by?.id !== userId) throw new ForbiddenException('Only the league owner can do this.');
+    }
+
     async update(id: string, updateLeagueDto: Partial<League>): Promise<League> {
         const league = await this.findOne(id);
-        Object.assign(league, updateLeagueDto);
+        // Whitelist editable fields; never let the body overwrite id/created_by/relations.
+        const { name, description, start_date, end_date } = updateLeagueDto;
+        Object.assign(league, Object.fromEntries(
+            Object.entries({ name, description, start_date, end_date }).filter(([, v]) => v !== undefined),
+        ));
         return this.leaguesRepository.save(league);
     }
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, Platform, StatusBar, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { ArrowLeft, Users, Trophy } from 'lucide-react-native';
 
 type CreateTournamentNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateTournament'>;
@@ -17,7 +18,7 @@ export const CreateTournamentScreen = () => {
 
     const handleCreate = async () => {
         if (!name.trim()) {
-            Alert.alert('Error', 'Please enter a tournament name');
+            showError('Please enter a tournament name');
             return;
         }
 
@@ -40,12 +41,10 @@ export const CreateTournamentScreen = () => {
                 // @ts-ignore
                 navigation.replace('TournamentDetail', { id: data.id });
             } else {
-                const errorData = await response.json();
-                Alert.alert('Error', errorData.message || 'Failed to create tournament');
+                await showApiError(response, 'Could not create the tournament.');
             }
         } catch (error) {
-            console.error('Create tournament error:', error);
-            Alert.alert('Error', 'An error occurred. Please try again.');
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }

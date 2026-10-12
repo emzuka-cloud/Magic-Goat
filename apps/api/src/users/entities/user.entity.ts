@@ -16,7 +16,8 @@ export class User {
     @Column({ nullable: true })
     custom_id: string; // For the U-xxxxxxx ID
 
-    @Column({ nullable: true })
+    // Never loaded by default, so it can't leak through relations or responses.
+    @Column({ nullable: true, select: false })
     password_hash: string;
 
     @CreateDateColumn()

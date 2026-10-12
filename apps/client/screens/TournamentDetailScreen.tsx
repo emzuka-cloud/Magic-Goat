@@ -4,6 +4,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -80,14 +81,15 @@ export const TournamentDetailScreen = () => {
             if (tRes.ok) {
                 const tData = await tRes.json();
                 setTournament(tData);
+            } else {
+                await showApiError(tRes, 'Could not load this tournament.');
             }
             if (pRes.ok) {
                 const pData = await pRes.json();
                 setPairings(pData);
             }
         } catch (error) {
-            console.error('Fetch error:', error);
-            Alert.alert('Error', 'Failed to load tournament details');
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -122,11 +124,10 @@ export const TournamentDetailScreen = () => {
                 setIdentifier('');
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to add user');
+                await showApiError(res, 'Could not add the player. Check the username, email or ID.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         } finally {
             setActionLoading(false);
         }
@@ -149,11 +150,10 @@ export const TournamentDetailScreen = () => {
                 setGroupId('');
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to add group');
+                await showApiError(res, 'Could not add the play group.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         } finally {
             setActionLoading(false);
         }
@@ -176,10 +176,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 fetchData();
             } else {
-                Alert.alert('Error', 'Failed to remove');
+                await showApiError(res, 'Could not remove the player.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -199,10 +199,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 navigation.goBack();
             } else {
-                Alert.alert('Error', 'Failed to delete tournament');
+                await showApiError(res, 'Could not delete the tournament.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -220,10 +220,10 @@ export const TournamentDetailScreen = () => {
                 if (res.ok) {
                     navigation.goBack();
                 } else {
-                    Alert.alert('Error', 'Failed to leave tournament');
+                    await showApiError(res, 'Could not leave the tournament.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'Network error');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -253,11 +253,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to start');
+                await showApiError(res, 'Could not start the tournament.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -275,9 +274,11 @@ export const TournamentDetailScreen = () => {
                 setSelectedMatch(null);
                 setSelectedWinners([]);
                 fetchData();
+            } else {
+                await showApiError(res, 'Could not save the match result.');
             }
         } catch (e) {
-            console.error(e);
+            showError(NETWORK_ERROR);
         }
     };
 

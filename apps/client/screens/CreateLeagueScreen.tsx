@@ -6,6 +6,7 @@ import { RootStackParamList } from '../types';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { API_URL } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { getAuthToken } from '../contexts/AuthContext';
 
 type CreateLeagueScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateLeague'>;
@@ -24,7 +25,7 @@ export const CreateLeagueScreen = () => {
         try {
             const token = await getAuthToken();
             if (!token) {
-                console.error('No auth token available');
+                showError('Your session has expired. Please sign in again.');
                 return;
             }
 
@@ -45,9 +46,11 @@ export const CreateLeagueScreen = () => {
                 const createdLeague = await response.json();
                 // Navigate to the detail screen of the created league
                 navigation.replace('LeagueDetail', { id: createdLeague.id });
+            } else {
+                await showApiError(response, 'Could not create the league.');
             }
         } catch (error) {
-            console.error('Failed to create league:', error);
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
         }

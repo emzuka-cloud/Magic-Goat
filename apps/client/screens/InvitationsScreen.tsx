@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useSocket } from '../hooks/useSocket';
+import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 
 interface Invitation {
     id: string;
@@ -32,46 +34,39 @@ export const InvitationsScreen = () => {
 
     const fetchInvitations = async () => {
         try {
-            const token = 'YOUR_JWT_TOKEN_HERE';
-            const response = await fetch('http://localhost:3000/tournaments/invitations/my', {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
+            const response = await fetch(`${API_URL}/tournaments/invitations/my`, {
+                headers: await getAuthHeaders(),
             });
-            const data = await response.json();
-            setInvitations(data);
+            if (!response.ok) return showApiError(response, 'Could not load your invitations.');
+            setInvitations(await response.json());
         } catch (error) {
-            console.error('Failed to fetch invitations:', error);
+            showError(NETWORK_ERROR);
         }
     };
 
     const handleAccept = async (invitationId: string) => {
         try {
-            const token = 'YOUR_JWT_TOKEN_HERE';
-            await fetch(`http://localhost:3000/tournaments/invitations/${invitationId}/accept`, {
+            const response = await fetch(`${API_URL}/tournaments/invitations/${invitationId}/accept`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
+                headers: await getAuthHeaders(),
             });
+            if (!response.ok) return showApiError(response, 'Could not accept the invitation.');
             setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
         } catch (error) {
-            console.error('Failed to accept invitation:', error);
+            showError(NETWORK_ERROR);
         }
     };
 
     const handleDecline = async (invitationId: string) => {
         try {
-            const token = 'YOUR_JWT_TOKEN_HERE';
-            await fetch(`http://localhost:3000/tournaments/invitations/${invitationId}/decline`, {
+            const response = await fetch(`${API_URL}/tournaments/invitations/${invitationId}/decline`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
+                headers: await getAuthHeaders(),
             });
+            if (!response.ok) return showApiError(response, 'Could not decline the invitation.');
             setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
         } catch (error) {
-            console.error('Failed to decline invitation:', error);
+            showError(NETWORK_ERROR);
         }
     };
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession, signInWithRedirect } from 'aws-amplify/auth';
 import { API_URL } from '../config';
+import { apiErrorMessage } from '../utils/errors';
 
 interface AuthContextType {
     user: any | null;
@@ -35,25 +36,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const handleSignIn = async (email: string, password: string) => {
         try {
-            const result = await signIn({ username: email, password });
-            await checkAuth();
+            await signIn({ username: email, password });
 
-            // Trigger user creation in backend database by making an authenticated API call
+            // Create/link the user in the backend before entering the app, so account
+            // problems (e.g. 409 email already in use) are shown on the login screen.
+            let res: Response | undefined;
             try {
                 const session = await fetchAuthSession();
                 const token = session.tokens?.idToken?.toString();
                 if (token) {
-                    // Make a simple API call to trigger JWT validation and findOrCreateUser
-                    await fetch(`${API_URL}/users/me`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                        },
+                    res = await fetch(`${API_URL}/users/me`, {
+                        headers: { 'Authorization': `Bearer ${token}` },
                     });
                 }
             } catch (apiError) {
-                console.log('User sync API call:', apiError);
-                // Don't throw - login was successful even if sync failed
+                // Server unreachable: let the user in; screens will show network errors.
+                console.log('User sync API call failed:', apiError);
             }
+            if (res && res.status >= 400 && res.status < 500) {
+                const message = await apiErrorMessage(res, 'Could not load your account.');
+                await signOut();
+                throw new Error(message);
+            }
+
+            await checkAuth();
         } catch (error: any) {
             throw new Error(error.message || 'Sign in failed');
         }
