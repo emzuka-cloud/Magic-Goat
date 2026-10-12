@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
@@ -59,9 +59,10 @@ export const PlayGroupsListScreen = () => {
         }
     };
 
-    useEffect(() => {
+    // Refetch whenever the screen regains focus (e.g. after creating a group).
+    useFocusEffect(useCallback(() => {
         fetchGroups();
-    }, []);
+    }, []));
 
     const onRefresh = () => {
         setRefreshing(true);

@@ -220,6 +220,44 @@ export class TournamentsService {
         });
     }
 
+    /**
+     * Single-elimination: auto-win matches whose opponent slot can never be filled (a BYE, or a
+     * feeder match with nobody in it) and move every decided winner into the next round.
+     */
+    // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    private async resolveByes(tournamentId: string, format: TournamentFormat): Promise<void> {
+        if (format === TournamentFormat.COMMANDER) return; // ponytail: 4-player pods advance 2 players; not handled here
+        const pairings = await this.pairingsRepository.find({
+            where: { tournament: { id: tournamentId } },
+            relations: ['player1', 'player2'],
+            order: { round: 'ASC', order: 'ASC' },
+        });
+        const at = (round: number, order: number) => pairings.find(p => p.round === round && p.order === order);
+        const slotEmptyForever = (p: Pairing, slot: 0 | 1): boolean => {
+            if (slot === 0 ? p.player1 : p.player2) return false;
+            if (p.round === 1) return true;
+            const feeder = at(p.round - 1, p.order * 2 + slot);
+            return !feeder || (slotEmptyForever(feeder, 0) && slotEmptyForever(feeder, 1));
+        };
+
+        const changed = new Set<Pairing>();
+        for (const p of pairings) {
+            if (p.result === PairingResult.PENDING) {
+                if (p.player1 && !p.player2 && slotEmptyForever(p, 1)) p.result = PairingResult.P1_WIN;
+                else if (p.player2 && !p.player1 && slotEmptyForever(p, 0)) p.result = PairingResult.P2_WIN;
+                if (p.result !== PairingResult.PENDING) changed.add(p);
+            }
+            const winner = p.result === PairingResult.P1_WIN ? p.player1 : p.result === PairingResult.P2_WIN ? p.player2 : null;
+            const next = at(p.round + 1, Math.floor(p.order / 2));
+            const slot = p.order % 2 === 0 ? 'player1' : 'player2';
+            if (winner && next && next[slot]?.id !== winner.id) {
+                next[slot] = winner;
+                changed.add(next);
+            }
+        }
+        if (changed.size) await this.pairingsRepository.save([...changed]);
+    }
+
     async generateBracket(tournamentId: string): Promise<Pairing[]> {
         const tournament = await this.findOne(tournamentId);
         const capacity = tournament.capacity || 8;
@@ -329,6 +367,8 @@ export class TournamentsService {
         // Update Tournament Status
         tournament.status = TournamentStatus.ACTIVE as any; // Cast if enum mismatch
         await this.tournamentsRepository.save(tournament);
+
+        await this.resolveByes(tournamentId, tournament.format);
 
         // Emit
         for (const p of finalPairings) {
@@ -463,6 +503,7 @@ export class TournamentsService {
             }
         }
 
+        await this.resolveByes(pairing.tournament.id, pairing.tournament.format);
         this.eventsGateway.server.to(`tournament_${pairing.tournament.id}`).emit('result_updated', pairing);
 
         return pairing;

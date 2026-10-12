@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react-native';
 
 import { API_URL } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
+import { todayLocal, isValidDateOnly } from '../utils/dates';
 import { getAuthToken } from '../contexts/AuthContext';
 
 type CreateLeagueScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateLeague'>;
@@ -14,12 +15,19 @@ type CreateLeagueScreenNavigationProp = NativeStackNavigationProp<RootStackParam
 export const CreateLeagueScreen = () => {
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [startDate, setStartDate] = useState(todayLocal());
     const [loading, setLoading] = useState(false);
     const navigation = useNavigation<CreateLeagueScreenNavigationProp>();
 
     const handleCreate = async () => {
-        if (!name.trim()) return;
+        if (!name.trim()) {
+            showError('Please enter a league name.');
+            return;
+        }
+        if (!isValidDateOnly(startDate)) {
+            showError('Please enter a valid start date (YYYY-MM-DD).');
+            return;
+        }
 
         setLoading(true);
         try {
@@ -90,19 +98,29 @@ export const CreateLeagueScreen = () => {
                         numberOfLines={4}
                     />
 
-                    <Text style={styles.label}>Start Date (YYYY-MM-DD)</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={startDate}
-                        onChangeText={setStartDate}
-                        placeholder="2023-01-01"
-                        placeholderTextColor="#666"
-                    />
+                    <Text style={styles.label}>Start Date</Text>
+                    {Platform.OS === 'web' ? (
+                        // Native browser date picker; react-native has no web date input.
+                        React.createElement('input', {
+                            type: 'date',
+                            value: startDate,
+                            onChange: (e: any) => setStartDate(e.target.value),
+                            style: { ...StyleSheet.flatten(styles.input), borderStyle: 'solid', colorScheme: 'dark', fontFamily: 'inherit', fontSize: 15 },
+                        })
+                    ) : (
+                        <TextInput
+                            style={styles.input}
+                            value={startDate}
+                            onChangeText={setStartDate}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor="#666"
+                        />
+                    )}
 
                     <TouchableOpacity
                         style={[styles.button, loading && styles.buttonDisabled]}
                         onPress={handleCreate}
-                        disabled={loading || !name.trim()}
+                        disabled={loading}
                     >
                         {loading ? (
                             <ActivityIndicator color="white" />
