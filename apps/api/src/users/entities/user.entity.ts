@@ -7,7 +7,9 @@ export class User {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ unique: true })
+    // Not loaded by default: users appear in public tournament/league/group responses.
+    // Lookups by email (WHERE clauses) still work.
+    @Column({ unique: true, select: false })
     email: string;
 
     @Column({ unique: true })
