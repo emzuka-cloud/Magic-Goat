@@ -4,9 +4,12 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
+import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { Dropdown } from '../components/Dropdown';
+import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -65,6 +68,7 @@ export const TournamentDetailScreen = () => {
 
     const [identifier, setIdentifier] = useState('');
     const [groupId, setGroupId] = useState('');
+    const { groups: myGroups, players: myPlayers } = useMyPlayGroups(addUserModalVisible || addGroupModalVisible);
     const [actionLoading, setActionLoading] = useState(false);
 
     const isOwner = tournament?.created_by.username === user?.username;
@@ -80,14 +84,15 @@ export const TournamentDetailScreen = () => {
             if (tRes.ok) {
                 const tData = await tRes.json();
                 setTournament(tData);
+            } else {
+                await showApiError(tRes, 'Could not load this tournament.');
             }
             if (pRes.ok) {
                 const pData = await pRes.json();
                 setPairings(pData);
             }
         } catch (error) {
-            console.error('Fetch error:', error);
-            Alert.alert('Error', 'Failed to load tournament details');
+            showError(NETWORK_ERROR);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -122,11 +127,10 @@ export const TournamentDetailScreen = () => {
                 setIdentifier('');
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to add user');
+                await showApiError(res, 'Could not add the player. Check the username, email or ID.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         } finally {
             setActionLoading(false);
         }
@@ -149,11 +153,10 @@ export const TournamentDetailScreen = () => {
                 setGroupId('');
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to add group');
+                await showApiError(res, 'Could not add the play group.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         } finally {
             setActionLoading(false);
         }
@@ -176,10 +179,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 fetchData();
             } else {
-                Alert.alert('Error', 'Failed to remove');
+                await showApiError(res, 'Could not remove the player.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -199,10 +202,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 navigation.goBack();
             } else {
-                Alert.alert('Error', 'Failed to delete tournament');
+                await showApiError(res, 'Could not delete the tournament.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -220,10 +223,10 @@ export const TournamentDetailScreen = () => {
                 if (res.ok) {
                     navigation.goBack();
                 } else {
-                    Alert.alert('Error', 'Failed to leave tournament');
+                    await showApiError(res, 'Could not leave the tournament.');
                 }
             } catch (e) {
-                Alert.alert('Error', 'Network error');
+                showError(NETWORK_ERROR);
             }
         };
 
@@ -253,11 +256,10 @@ export const TournamentDetailScreen = () => {
             if (res.ok) {
                 fetchData();
             } else {
-                const err = await res.json();
-                Alert.alert('Error', err.message || 'Failed to start');
+                await showApiError(res, 'Could not start the tournament.');
             }
         } catch (e) {
-            Alert.alert('Error', 'Network error');
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -275,9 +277,11 @@ export const TournamentDetailScreen = () => {
                 setSelectedMatch(null);
                 setSelectedWinners([]);
                 fetchData();
+            } else {
+                await showApiError(res, 'Could not save the match result.');
             }
         } catch (e) {
-            console.error(e);
+            showError(NETWORK_ERROR);
         }
     };
 
@@ -353,10 +357,24 @@ export const TournamentDetailScreen = () => {
         });
 
         const sortedRounds = Array.from(rounds.keys()).sort((a, b) => a - b);
+        rounds.forEach(list => list.sort((a, b) => a.order - b.order));
         const isCommander = tournament?.format === 'commander';
+        const final = rounds.get(sortedRounds[sortedRounds.length - 1])?.[0];
+        const champion = !isCommander && tournament?.status === 'completed' && final
+            ? (final.result === 'p1_win' ? final.player1 : final.result === 'p2_win' ? final.player2 : null)
+            : null;
 
         return (
             <View style={styles.section}>
+                {champion && (
+                    <View style={styles.championCard} accessibilityRole="summary">
+                        <Trophy size={36} color="#facc15" />
+                        <View>
+                            <Text style={styles.championLabel}>Champion</Text>
+                            <Text style={styles.championName}>{champion.username}</Text>
+                        </View>
+                    </View>
+                )}
                 {sortedRounds.map(r => (
                     <View key={r} style={styles.roundContainer}>
                         <Text style={styles.roundTitle}>Round {r}</Text>
@@ -383,23 +401,31 @@ export const TournamentDetailScreen = () => {
                                     </View>
                                 );
                             }
+                            const canReport = isOwner && !!p.player1 && !!p.player2;
                             return (
                                 <View key={p.id} style={styles.matchCard}>
-                                    <TouchableOpacity
-                                        style={[styles.playerObj, p.result === 'p1_win' && styles.winner]}
-                                        onPress={() => isOwner && handleUpdateResult(p.id, 'p1_win')}
-                                    >
+                                    <View style={[styles.playerObj, p.result === 'p1_win' && styles.winner]}>
                                         <Text style={styles.playerName}>{p.player1 ? p.player1.username : 'BYE'}</Text>
-                                    </TouchableOpacity>
+                                    </View>
                                     <View style={styles.vsContainer}>
                                         <Text style={styles.vsText}>VS</Text>
                                     </View>
-                                    <TouchableOpacity
-                                        style={[styles.playerObj, p.result === 'p2_win' && styles.winner]}
-                                        onPress={() => isOwner && handleUpdateResult(p.id, 'p2_win')}
-                                    >
+                                    <View style={[styles.playerObj, p.result === 'p2_win' && styles.winner]}>
                                         <Text style={styles.playerName}>{p.player2 ? p.player2.username : 'BYE'}</Text>
-                                    </TouchableOpacity>
+                                    </View>
+                                    {canReport && (
+                                        <View style={styles.reportRow}>
+                                            <Dropdown
+                                                placeholder="Report result"
+                                                options={[
+                                                    { label: `${p.player1!.username} wins`, value: 'p1_win' },
+                                                    { label: `${p.player2!.username} wins`, value: 'p2_win' },
+                                                ]}
+                                                value={p.result === 'p1_win' || p.result === 'p2_win' ? p.result : null}
+                                                onChange={result => handleUpdateResult(p.id, result)}
+                                            />
+                                        </View>
+                                    )}
                                 </View>
                             );
                         })}
@@ -471,9 +497,19 @@ export const TournamentDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Participant</Text>
+                            <Dropdown
+                                placeholder="Pick a player from your play groups"
+                                emptyText="No other players in your play groups yet. Type a name below."
+                                options={myPlayers
+                                    .filter(m => !tournament?.participants.some(p => p.user?.id === m.id))
+                                    .map(m => ({ label: m.username, value: m.username, hint: m.custom_id }))}
+                                value={identifier || null}
+                                onChange={setIdentifier}
+                            />
+                            <Text style={styles.orText}>or type a username, email or user ID</Text>
                             <TextInput
                                 style={styles.input}
-                                placeholder="Username or ID"
+                                placeholder="Username, email or U-ID"
                                 placeholderTextColor="#666"
                                 value={identifier}
                                 onChangeText={setIdentifier}
@@ -495,12 +531,12 @@ export const TournamentDetailScreen = () => {
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Play Group</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Group ID"
-                                placeholderTextColor="#666"
-                                value={groupId}
-                                onChangeText={setGroupId}
+                            <Dropdown
+                                placeholder="Choose one of your play groups"
+                                emptyText="You don't have any play groups yet."
+                                options={myGroups.map(g => ({ label: g.name, value: g.id, hint: `${g.members?.length ?? 0} members` }))}
+                                value={groupId || null}
+                                onChange={setGroupId}
                             />
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity onPress={() => setAddGroupModalVisible(false)} style={styles.cancelButton}>
@@ -592,6 +628,11 @@ const styles = StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
     modalContent: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#2e1065' },
     modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 },
+    orText: { color: '#888', fontSize: 12, marginBottom: 8 },
+    reportRow: { paddingHorizontal: 12, paddingTop: 12 },
+    championCard: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#422006', borderColor: '#facc15', borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 24 },
+    championLabel: { color: '#facc15', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
+    championName: { color: 'white', fontSize: 22, fontWeight: 'bold' },
     input: { backgroundColor: '#0f0518', color: 'white', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#2e1065', marginBottom: 24 },
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
     cancelButton: { padding: 12 },

@@ -15,7 +15,8 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/groups')
-    addGroup(@Param('id') id: string, @Body() body: { groupId: string }) {
+    async addGroup(@Param('id') id: string, @Body() body: { groupId: string }, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.addGroup(id, body.groupId);
     }
 
@@ -27,19 +28,22 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Delete(':id')
-    delete(@Param('id') id: string) {
+    async delete(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.deleteTournament(id);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/participants')
-    addParticipant(@Param('id') id: string, @Body() body: { userId?: string; username?: string }) {
+    async addParticipant(@Param('id') id: string, @Body() body: { userId?: string; username?: string }, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.addParticipant(id, body.userId || body.username || '');
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Delete(':id/participants/:userId')
-    removeParticipant(@Param('id') id: string, @Param('userId') userId: string) {
+    async removeParticipant(@Param('id') id: string, @Param('userId') userId: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.removeParticipant(id, userId);
     }
 
@@ -62,10 +66,12 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/pairings')
-    createPairing(
+    async createPairing(
         @Param('id') id: string,
         @Body() body: { round: number; player1Id: string; player2Id: string },
+        @Request() req: any,
     ) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.createPairing(id, body.round, body.player1Id, body.player2Id);
     }
 
@@ -76,37 +82,45 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/pairings/generate')
-    generatePairings(@Param('id') id: string) {
+    async generatePairings(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.generatePairings(id);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Put(':id/pairings/:pairingId')
-    updatePairingResult(
+    async updatePairingResult(
+        @Param('id') id: string,
         @Param('pairingId') pairingId: string,
         @Body() body: { result: string },
+        @Request() req: any,
     ) {
-        return this.tournamentsService.updatePairingResult(pairingId, body.result);
+        await this.tournamentsService.assertOwner(id, req.user.id);
+        return this.tournamentsService.updatePairingResult(id, pairingId, body.result);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/timer/start')
-    startTimer(
+    async startTimer(
         @Param('id') id: string,
         @Body() body: { durationMinutes?: number },
+        @Request() req: any,
     ) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.startTimer(id, body.durationMinutes);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/timer/pause')
-    pauseTimer(@Param('id') id: string) {
+    async pauseTimer(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.pauseTimer(id);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/timer/reset')
-    resetTimer(@Param('id') id: string) {
+    async resetTimer(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.resetTimer(id);
     }
 
@@ -116,7 +130,9 @@ export class TournamentsController {
         @Param('id') id: string,
         @Query('format') format: 'json' | 'csv' = 'json',
         @Res() res: any,
+        @Request() req: any,
     ) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         const { data, contentType, filename } = await this.tournamentsService.exportTournament(id, format);
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -125,10 +141,12 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/invitations')
-    createInvitation(
+    async createInvitation(
         @Param('id') id: string,
         @Body() body: { inviteeId: string },
+        @Request() req: any,
     ) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.createInvitation(id, body.inviteeId);
     }
 

@@ -7,7 +7,9 @@ export class User {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ unique: true })
+    // Not loaded by default: users appear in public tournament/league/group responses.
+    // Lookups by email (WHERE clauses) still work.
+    @Column({ unique: true, select: false })
     email: string;
 
     @Column({ unique: true })
@@ -16,7 +18,8 @@ export class User {
     @Column({ nullable: true })
     custom_id: string; // For the U-xxxxxxx ID
 
-    @Column({ nullable: true })
+    // Never loaded by default, so it can't leak through relations or responses.
+    @Column({ nullable: true, select: false })
     password_hash: string;
 
     @CreateDateColumn()

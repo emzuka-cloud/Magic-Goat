@@ -41,8 +41,8 @@ export class NotificationsService {
         });
     }
 
-    async markAsRead(id: string): Promise<Notification> {
-        const notification = await this.notificationsRepository.findOne({ where: { id } });
+    async markAsRead(id: string, userId: string): Promise<Notification> {
+        const notification = await this.notificationsRepository.findOne({ where: { id, userId } });
         if (notification) {
             notification.isRead = true;
             return this.notificationsRepository.save(notification);
@@ -54,7 +54,7 @@ export class NotificationsService {
         await this.notificationsRepository.update({ userId, isRead: false }, { isRead: true });
     }
 
-    async remove(id: string): Promise<void> {
-        await this.notificationsRepository.delete(id);
+    async remove(id: string, userId: string): Promise<void> {
+        await this.notificationsRepository.delete({ id, userId });
     }
 }
