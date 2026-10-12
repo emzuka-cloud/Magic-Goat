@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security (2026-10-12)
+
+- Cognito users are matched by their token `sub` only; an existing account is linked by email only when Cognito reports the email as verified (unverified collisions return 409). Prevents taking over an account by registering the same username.
+- Ownership checks on every tournament, league and play group change (403 for non-owners); match results are scoped to their tournament; league edits limited to name, description and dates; notifications scoped to their recipient.
+- A play group's owner is always the signed-in user.
+- `password_hash` and `email` are no longer returned in any response.
+- Removed the unused local username/password login and its hard-coded JWT secret.
+- Stopped tracking `node_modules`, `dist` and `.idea`; added a root `.gitignore`.
+
+### Added (2026-10-12)
+
+- **Readable error messages**: `utils/errors.ts` turns failed API responses into user-facing messages (401/403/404/409/429/5xx and network errors) on every screen, including web where `Alert.alert` does nothing. Account problems at sign-in are shown on the login screen.
+- **Dropdowns**: shared `components/Dropdown.tsx` (no dependencies).
+  - Pick players from your play groups in the tournament, league and play group "Add" dialogs (typing a username, email or ID still works).
+  - Pick a play group for a tournament instead of typing its ID.
+  - "Report result" dropdown on each match replaces tapping a player name.
+- **Tournament completion**: single-elimination tournaments become COMPLETED when the final is decided, with a Champion banner.
+- **Date picker** for the league start date on web.
+
+### Fixed (2026-10-12)
+
+- Bracket byes never advanced, so tournaments with fewer players than capacity could not finish. Byes and empty bracket branches now resolve automatically.
+- Matches in a round were displayed out of order.
+- New play groups did not appear in the list until the screen was reopened.
+- League dates were shown one day early in time zones west of UTC.
+- Invalid league dates crashed the API (500); now a 400 with a message, and the form validates before sending.
+- "Create League" with an empty name silently did nothing.
+- Invitations screen and offline sync used a placeholder token and `localhost`; they now use the real session and `API_URL`. Offline sync drops changes the server rejects (and says why) and retries temporary failures.
+- User errors such as "tournament is full" returned 500; now 400 with their message.
+
 ### Added
 
 - **AWS Migration Plan** (2025-12-17)

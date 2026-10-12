@@ -1,0 +1,54 @@
+# Project Context (for picking up work)
+
+Last session: 2026-10-12. Branch `security-fixes` (4 commits ahead of `main`, **not pushed**).
+
+## What this is
+
+Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
+
+- `apps/api` — NestJS 11 + TypeORM 0.3 + PostgreSQL. Auth = AWS Cognito JWTs verified via JWKS (`auth/jwt.strategy.ts`). Socket.io gateway in `events/`.
+- `apps/client` — Expo 54 / React Native (web + mobile). Cognito via Amplify (`aws-config.ts`). API base in `config.ts` (`http://localhost:3000`, `10.0.2.2` on Android emulator).
+
+## Conventions established
+
+- **Authorization**: every mutating route calls `<service>.assertOwner(id, req.user.id)` before acting (tournaments, leagues, playgroups). Notifications are scoped by `userId` in the query.
+- **Users**: `findOrCreateUser` (users.service.ts) matches by Cognito `sub`; links by email only if `email_verified`. `password_hash` and `email` are `select: false`.
+- **Errors (API)**: throw Nest HTTP exceptions with a user-readable message — never `throw new Error(...)` (becomes a 500).
+- **Errors (client)**: on a failed fetch use `showApiError(res, 'Could not …')`; on a thrown fetch use `showError(NETWORK_ERROR)` (`utils/errors.ts`). Works on web.
+- **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
+- **Dates**: date-only strings via `utils/dates.ts` (`todayLocal`, `formatDateOnly`, `isValidDateOnly`).
+- **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Single elimination only.
+
+## Running locally
+
+Docker/PostgreSQL are not installed on this PC. Last session used a throwaway portable Postgres:
+
+```bash
+# in any scratch folder (outside the repo)
+npm i embedded-postgres@17.4.0-beta.15
+# start script: user mtg_user / mtg_password, db mtg_db, port 5432 (see docker-compose.yml values)
+```
+
+Or `docker compose up -d` if Docker is installed. Then:
+
+```bash
+cd apps/api && npx nest start --watch          # http://localhost:3000
+cd apps/client && npx expo start --web --port 8081
+```
+
+- Don't set `CI=1` for Expo — it disables file watching (stale bundle).
+- On Windows, stopping a background `npx` shell can leave the `node` child holding ports 3000/8081.
+- `seed.ts` is broken (see PENDING_TASKS.md); insert test users directly if needed.
+- Sign-in uses the real Cognito pool, so test with a real account.
+
+## Tests
+
+- API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution + completion).
+- Type-check: `npx tsc --noEmit -p tsconfig.json` in each app.
+- Browser testing on web: `window.alert`/`confirm` block automation; override them first (`window.alert = m => console.log(m)`).
+
+## Where things are tracked
+
+- `CHANGELOG.md` — what changed.
+- `PENDING_TASKS.md` — what's left (UI, features, engineering).
+- `private/SECURITY_AUDIT.md` — full audit + open security items (gitignored, local only).
