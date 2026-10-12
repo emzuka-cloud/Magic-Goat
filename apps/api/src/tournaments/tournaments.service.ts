@@ -256,6 +256,13 @@ export class TournamentsService {
             }
         }
         if (changed.size) await this.pairingsRepository.save([...changed]);
+
+        // The tournament is complete once the final (the only match with no next round) has a winner.
+        const final = pairings[pairings.length - 1];
+        if (final) {
+            const done = final.result === PairingResult.P1_WIN || final.result === PairingResult.P2_WIN;
+            await this.tournamentsRepository.update(tournamentId, { status: done ? TournamentStatus.COMPLETED : TournamentStatus.ACTIVE });
+        }
     }
 
     async generateBracket(tournamentId: string): Promise<Pairing[]> {
@@ -460,6 +467,15 @@ export class TournamentsService {
 
         if (!pairing) {
             throw new NotFoundException('This match was not found in this tournament.');
+        }
+
+        if (pairing.tournament.format !== TournamentFormat.COMMANDER) {
+            if (result !== PairingResult.P1_WIN && result !== PairingResult.P2_WIN) {
+                throw new BadRequestException('A match result must be a win for player 1 or player 2.');
+            }
+            if (!(result === PairingResult.P1_WIN ? pairing.player1 : pairing.player2)) {
+                throw new BadRequestException('There is no player in that slot to win this match.');
+            }
         }
 
         pairing.result = result as any;

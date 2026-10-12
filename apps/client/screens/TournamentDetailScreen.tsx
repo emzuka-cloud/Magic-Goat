@@ -359,9 +359,22 @@ export const TournamentDetailScreen = () => {
         const sortedRounds = Array.from(rounds.keys()).sort((a, b) => a - b);
         rounds.forEach(list => list.sort((a, b) => a.order - b.order));
         const isCommander = tournament?.format === 'commander';
+        const final = rounds.get(sortedRounds[sortedRounds.length - 1])?.[0];
+        const champion = !isCommander && tournament?.status === 'completed' && final
+            ? (final.result === 'p1_win' ? final.player1 : final.result === 'p2_win' ? final.player2 : null)
+            : null;
 
         return (
             <View style={styles.section}>
+                {champion && (
+                    <View style={styles.championCard} accessibilityRole="summary">
+                        <Trophy size={36} color="#facc15" />
+                        <View>
+                            <Text style={styles.championLabel}>Champion</Text>
+                            <Text style={styles.championName}>{champion.username}</Text>
+                        </View>
+                    </View>
+                )}
                 {sortedRounds.map(r => (
                     <View key={r} style={styles.roundContainer}>
                         <Text style={styles.roundTitle}>Round {r}</Text>
@@ -388,23 +401,31 @@ export const TournamentDetailScreen = () => {
                                     </View>
                                 );
                             }
+                            const canReport = isOwner && !!p.player1 && !!p.player2;
                             return (
                                 <View key={p.id} style={styles.matchCard}>
-                                    <TouchableOpacity
-                                        style={[styles.playerObj, p.result === 'p1_win' && styles.winner]}
-                                        onPress={() => isOwner && handleUpdateResult(p.id, 'p1_win')}
-                                    >
+                                    <View style={[styles.playerObj, p.result === 'p1_win' && styles.winner]}>
                                         <Text style={styles.playerName}>{p.player1 ? p.player1.username : 'BYE'}</Text>
-                                    </TouchableOpacity>
+                                    </View>
                                     <View style={styles.vsContainer}>
                                         <Text style={styles.vsText}>VS</Text>
                                     </View>
-                                    <TouchableOpacity
-                                        style={[styles.playerObj, p.result === 'p2_win' && styles.winner]}
-                                        onPress={() => isOwner && handleUpdateResult(p.id, 'p2_win')}
-                                    >
+                                    <View style={[styles.playerObj, p.result === 'p2_win' && styles.winner]}>
                                         <Text style={styles.playerName}>{p.player2 ? p.player2.username : 'BYE'}</Text>
-                                    </TouchableOpacity>
+                                    </View>
+                                    {canReport && (
+                                        <View style={styles.reportRow}>
+                                            <Dropdown
+                                                placeholder="Report result"
+                                                options={[
+                                                    { label: `${p.player1!.username} wins`, value: 'p1_win' },
+                                                    { label: `${p.player2!.username} wins`, value: 'p2_win' },
+                                                ]}
+                                                value={p.result === 'p1_win' || p.result === 'p2_win' ? p.result : null}
+                                                onChange={result => handleUpdateResult(p.id, result)}
+                                            />
+                                        </View>
+                                    )}
                                 </View>
                             );
                         })}
@@ -608,6 +629,10 @@ const styles = StyleSheet.create({
     modalContent: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#2e1065' },
     modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 },
     orText: { color: '#888', fontSize: 12, marginBottom: 8 },
+    reportRow: { paddingHorizontal: 12, paddingTop: 12 },
+    championCard: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#422006', borderColor: '#facc15', borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 24 },
+    championLabel: { color: '#facc15', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
+    championName: { color: 'white', fontSize: 22, fontWeight: 'bold' },
     input: { backgroundColor: '#0f0518', color: 'white', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#2e1065', marginBottom: 24 },
     modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
     cancelButton: { padding: 12 },
