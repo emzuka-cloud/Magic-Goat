@@ -66,6 +66,16 @@ export const storage = {
         }
     },
 
+    /** On sign-out: cached tournaments and queued changes belong to that account, not the next one. */
+    async clearUserData(): Promise<void> {
+        try {
+            const keys = await AsyncStorage.getAllKeys();
+            await AsyncStorage.multiRemove(keys.filter(k => k.startsWith(TOURNAMENT_PREFIX) || k === MUTATIONS_KEY));
+        } catch (error) {
+            console.error('Failed to clear offline data:', error);
+        }
+    },
+
     async clearAllMutations(): Promise<void> {
         try {
             await AsyncStorage.setItem(MUTATIONS_KEY, JSON.stringify([]));
