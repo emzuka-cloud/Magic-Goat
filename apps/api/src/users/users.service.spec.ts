@@ -1,4 +1,4 @@
-import { UsersService } from './users.service';
+import { UsersService, likePrefix } from './users.service';
 import { User } from './entities/user.entity';
 
 function serviceWith(rows: Partial<User>[]) {
@@ -53,5 +53,13 @@ describe('UsersService custom_id collisions', () => {
     const repo = { findOne: jest.fn(async () => null), create: jest.fn((u) => u), save: jest.fn(async () => { throw dup('username'); }) };
     await expect(new UsersService(repo as any).findOrCreateUser({ sub: 'new', 'cognito:username': 'bob' })).rejects.toThrow('dup');
     expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('user search', () => {
+  it('matches a username prefix literally (LIKE wildcards escaped)', () => {
+    expect(likePrefix('pla')).toBe('pla%');
+    // input: 50%_a\b   ->   50\%\_a\\b%
+    expect(likePrefix('50%_a\\b')).toBe('50\\%\\_a\\\\b%');
   });
 });

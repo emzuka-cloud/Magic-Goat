@@ -13,6 +13,7 @@ import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 import { modalStyles } from '../utils/modalStyles';
 import { JoinRequests } from '../components/JoinRequests';
+import { PlayerSearch } from '../components/PlayerSearch';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -511,14 +512,7 @@ export const LeagueDetailScreen = () => {
                                 onChange={setNewMemberId}
                             />
                             <Text style={styles.modalLabel}>Or type a username, email or user ID</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                value={newMemberId}
-                                onChangeText={setNewMemberId}
-                                placeholder="Enter username or user ID"
-                                placeholderTextColor="#666"
-                                autoCapitalize="none"
-                            />
+                            <PlayerSearch inputStyle={styles.modalInput} value={newMemberId} onChange={setNewMemberId} />
 
                             <TouchableOpacity
                                 style={[styles.modalButton, addingMember && styles.modalButtonDisabled]}

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-10-12, offline + search)
+
+- **Offline match results**: reporting a result with no connection saves it on the device, shows it right away and sends it automatically when the connection is back (on reconnect, app start, or the next time the tournament is opened). Your tournament list and each tournament you opened are kept on the device, so they open offline with an "Offline" banner. Results the server rejects later are dropped with a message.
+- **Find any player**: the "Add" dialogs (tournament, league, play group) suggest matching players from the whole app as you type a username or U-ID (`GET /users/search`). Emails are never searched or shown.
+
 ### Fixed (2026-10-12, seed)
 
 - `npm run seed` works again (it listed entities by hand and missed newer ones; it now loads all of them). It creates 8 test players; with `SEED_OWNER=<your username>` it also creates a play group and a league owned by you with those players. Removed the unusable admin/password user.

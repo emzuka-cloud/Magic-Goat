@@ -31,7 +31,9 @@ export const storage = {
 
     async queueMutation(mutation: Omit<PendingMutation, 'id' | 'timestamp'>): Promise<void> {
         try {
-            const mutations = await this.getPendingMutations();
+            // A newer result for the same match replaces the queued one.
+            const mutations = (await this.getPendingMutations()).filter(m =>
+                !(mutation.type === 'report_result' && m.type === 'report_result' && m.payload?.pairingId === mutation.payload?.pairingId));
             const newMutation: PendingMutation = {
                 ...mutation,
                 id: `${Date.now()}_${Math.random()}`,
