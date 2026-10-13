@@ -37,3 +37,21 @@ describe('UsersService.findOrCreateUser', () => {
     expect(user).toBe(admin);
   });
 });
+
+describe('UsersService custom_id collisions', () => {
+  const dup = (column: string) => Object.assign(new Error('dup'), { driverError: { code: '23505', detail: `Key (${column})=(x) already exists.` } });
+
+  it('re-rolls custom_id when the unique index rejects it', async () => {
+    const repo = { findOne: jest.fn(async () => null), create: jest.fn((u) => u), save: jest.fn() };
+    repo.save.mockRejectedValueOnce(dup('custom_id')).mockImplementationOnce(async (u) => u);
+    const user = await new UsersService(repo as any).findOrCreateUser({ sub: 'new', 'cognito:username': 'bob' });
+    expect(user.id).toBe('new');
+    expect(repo.save).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry other unique violations', async () => {
+    const repo = { findOne: jest.fn(async () => null), create: jest.fn((u) => u), save: jest.fn(async () => { throw dup('username'); }) };
+    await expect(new UsersService(repo as any).findOrCreateUser({ sub: 'new', 'cognito:username': 'bob' })).rejects.toThrow('dup');
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+});

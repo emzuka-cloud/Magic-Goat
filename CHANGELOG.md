@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The client no longer logs the Cognito session to the console.
 
 - Every request body is validated (DTO classes + global `ValidationPipe`); unknown fields are dropped and bad values return 400 with a list of what is wrong. A malformed ID returns 400 "Invalid ID." instead of 500.
+- CSV export quotes every field and neutralises values that spreadsheets would run as formulas (e.g. a username starting with `=`). Export filenames are reduced to safe characters, so a tournament name can no longer break the download header (was a 500).
+- User `custom_id` is unique in the database; a rare collision on sign-up is re-rolled instead of failing.
 
 ### Fixed (2026-10-12, second pass)
 

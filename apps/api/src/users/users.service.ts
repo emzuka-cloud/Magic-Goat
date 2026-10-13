@@ -31,11 +31,19 @@ export class UsersService {
             finalUsername = `${finalUsername}-${id.slice(0, 8)}`;
         }
 
-        return this.usersRepository.save(this.usersRepository.create({
-            id,
-            email,
-            username: finalUsername,
-            custom_id: 'U-' + randomUUID().slice(0, 7),
-        }));
+        // custom_id is short (people type it), so a collision is possible; the unique index catches it and we re-roll.
+        for (let attempt = 1; ; attempt++) {
+            try {
+                return await this.usersRepository.save(this.usersRepository.create({
+                    id,
+                    email,
+                    username: finalUsername,
+                    custom_id: 'U-' + randomUUID().slice(0, 7),
+                }));
+            } catch (e: any) {
+                const customIdTaken = e?.driverError?.code === '23505' && String(e.driverError.detail).includes('(custom_id)');
+                if (!customIdTaken || attempt >= 3) throw e;
+            }
+        }
     }
 }
