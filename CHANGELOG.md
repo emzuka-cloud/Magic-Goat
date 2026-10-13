@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CORS allows only known browser origins (`CORS_ORIGINS`, default `http://localhost:8081`) and no longer sends credentials headers.
 - The client no longer logs the Cognito session to the console.
 
+- Every request body is validated (DTO classes + global `ValidationPipe`); unknown fields are dropped and bad values return 400 with a list of what is wrong. A malformed ID returns 400 "Invalid ID." instead of 500.
+
 ### Fixed (2026-10-12, second pass)
 
 - Real-time invitations never arrived: nothing joined the `user_<id>` room, and the socket hook never re-rendered with its connection. Sockets now join the user's room on connect.

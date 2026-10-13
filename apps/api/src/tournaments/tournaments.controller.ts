@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, Query, Res, Delete } from '@nestjs/common';
 import { TournamentsService } from './tournaments.service';
 import { AuthGuard } from '@nestjs/passport';
-import { TournamentFormat } from './entities/tournament.entity';
+import { AddPersonDto, CreatePairingDto, CreateTournamentDto, ExportQueryDto, GroupIdDto, InvitationDto, PairingResultDto, StartTimerDto } from './dto';
 
 @Controller('tournaments')
 export class TournamentsController {
@@ -9,13 +9,13 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post()
-    create(@Body() createTournamentDto: { name: string; format: TournamentFormat; capacity?: number }, @Request() req: any) {
+    create(@Body() createTournamentDto: CreateTournamentDto, @Request() req: any) {
         return this.tournamentsService.create(createTournamentDto, req.user);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/groups')
-    async addGroup(@Param('id') id: string, @Body() body: { groupId: string }, @Request() req: any) {
+    async addGroup(@Param('id') id: string, @Body() body: GroupIdDto, @Request() req: any) {
         await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.addGroup(id, body.groupId);
     }
@@ -35,7 +35,7 @@ export class TournamentsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/participants')
-    async addParticipant(@Param('id') id: string, @Body() body: { userId?: string; username?: string }, @Request() req: any) {
+    async addParticipant(@Param('id') id: string, @Body() body: AddPersonDto, @Request() req: any) {
         await this.tournamentsService.assertOwner(id, req.user.id);
         return this.tournamentsService.addParticipant(id, body.userId || body.username || '');
     }
@@ -69,7 +69,7 @@ export class TournamentsController {
     @Post(':id/pairings')
     async createPairing(
         @Param('id') id: string,
-        @Body() body: { round: number; player1Id: string; player2Id: string },
+        @Body() body: CreatePairingDto,
         @Request() req: any,
     ) {
         await this.tournamentsService.assertOwner(id, req.user.id);
@@ -95,7 +95,7 @@ export class TournamentsController {
     async updatePairingResult(
         @Param('id') id: string,
         @Param('pairingId') pairingId: string,
-        @Body() body: { result: string },
+        @Body() body: PairingResultDto,
         @Request() req: any,
     ) {
         await this.tournamentsService.assertOwner(id, req.user.id);
@@ -106,7 +106,7 @@ export class TournamentsController {
     @Post(':id/timer/start')
     async startTimer(
         @Param('id') id: string,
-        @Body() body: { durationMinutes?: number },
+        @Body() body: StartTimerDto,
         @Request() req: any,
     ) {
         await this.tournamentsService.assertOwner(id, req.user.id);
@@ -131,12 +131,12 @@ export class TournamentsController {
     @Get(':id/export')
     async exportTournament(
         @Param('id') id: string,
-        @Query('format') format: 'json' | 'csv' = 'json',
+        @Query() query: ExportQueryDto,
         @Res() res: any,
         @Request() req: any,
     ) {
         await this.tournamentsService.assertOwner(id, req.user.id);
-        const { data, contentType, filename } = await this.tournamentsService.exportTournament(id, format);
+        const { data, contentType, filename } = await this.tournamentsService.exportTournament(id, query.format);
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.send(data);
@@ -146,7 +146,7 @@ export class TournamentsController {
     @Post(':id/invitations')
     async createInvitation(
         @Param('id') id: string,
-        @Body() body: { inviteeId: string },
+        @Body() body: InvitationDto,
         @Request() req: any,
     ) {
         await this.tournamentsService.assertOwner(id, req.user.id);

@@ -75,19 +75,19 @@ async function seed() {
         {
             name: 'Standard League 2025',
             description: 'The premier Standard format league for 2025.',
-            start_date: new Date(),
+            start_date: new Date().toISOString().slice(0, 10),
             created_by: admin,
         },
         {
             name: 'Modern Monday Nights',
             description: 'Weekly Modern format tournaments.',
-            start_date: new Date(),
+            start_date: new Date().toISOString().slice(0, 10),
             created_by: admin,
         },
         {
             name: 'Commander Legends',
             description: 'Casual Commander league for fun and glory.',
-            start_date: new Date(),
+            start_date: new Date().toISOString().slice(0, 10),
             created_by: admin,
         },
     ];
