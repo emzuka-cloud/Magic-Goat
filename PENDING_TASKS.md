@@ -15,7 +15,7 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 ## Engineering
 
-- [ ] Branch `security-fixes` is 16 commits ahead of `origin/security-fixes` (local only, not pushed). Push, then open a PR into `main`.
+- [ ] Open a PR from `security-fixes` into `main` (branch is pushed).
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
 - [ ] Lint (API): ~2.6k ESLint findings, ~2.3k auto-fixable formatting. Run `npx eslint --fix` in a commit of its own, fix the rest, then add lint to CI.

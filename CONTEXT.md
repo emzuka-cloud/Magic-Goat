@@ -1,6 +1,6 @@
 # Project Context (for picking up work)
 
-Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, not merged; see `git log main..security-fixes`). The last 16 commits (2026-10-12) are local only, not pushed yet.
+Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, not merged; see `git log main..security-fixes`). Pushed to `origin/security-fixes` (2026-10-12).
 
 ## What this is
 
