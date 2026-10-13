@@ -37,6 +37,16 @@ export class TournamentsService {
         if (tournament.created_by?.id !== userId) throw new ForbiddenException('Only the tournament owner can do this.');
     }
 
+    /** Owner or participant; returns the tournament so callers don't load it twice. */
+    async assertCanView(tournamentId: string, userId: string): Promise<Tournament> {
+        const tournament = await this.findOne(tournamentId);
+        const isMember = tournament.participants?.some((p) => p.user?.id === userId);
+        if (tournament.created_by?.id !== userId && !isMember) {
+            throw new ForbiddenException('You are not part of this tournament.');
+        }
+        return tournament;
+    }
+
     async addParticipant(tournamentId: string, identifier: string): Promise<TournamentParticipant> {
         const tournament = await this.findOne(tournamentId);
 

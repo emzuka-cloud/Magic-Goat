@@ -18,9 +18,10 @@ export class LeaguesController {
         return this.leaguesService.findAll(req.user.id);
     }
 
+    @UseGuards(AuthGuard('jwt'))
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.leaguesService.findOne(id);
+    findOne(@Param('id') id: string, @Request() req: any) {
+        return this.leaguesService.assertCanView(id, req.user.id);
     }
 
     @UseGuards(AuthGuard('jwt'))
@@ -37,8 +38,10 @@ export class LeaguesController {
         return this.leaguesService.remove(id);
     }
 
+    @UseGuards(AuthGuard('jwt'))
     @Get(':id/standings')
-    getStandings(@Param('id') id: string) {
+    async getStandings(@Param('id') id: string, @Request() req: any) {
+        await this.leaguesService.assertCanView(id, req.user.id);
         return this.leaguesService.getStandings(id);
     }
 

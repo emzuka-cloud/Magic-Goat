@@ -53,9 +53,10 @@ export class TournamentsController {
         return this.tournamentsService.removeParticipant(id, req.user.id);
     }
 
+    @UseGuards(AuthGuard('jwt'))
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.tournamentsService.findOne(id);
+    findOne(@Param('id') id: string, @Request() req: any) {
+        return this.tournamentsService.assertCanView(id, req.user.id);
     }
 
     @UseGuards(AuthGuard('jwt'))
@@ -75,8 +76,10 @@ export class TournamentsController {
         return this.tournamentsService.createPairing(id, body.round, body.player1Id, body.player2Id);
     }
 
+    @UseGuards(AuthGuard('jwt'))
     @Get(':id/pairings')
-    getPairings(@Param('id') id: string) {
+    async getPairings(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertCanView(id, req.user.id);
         return this.tournamentsService.getPairings(id);
     }
 

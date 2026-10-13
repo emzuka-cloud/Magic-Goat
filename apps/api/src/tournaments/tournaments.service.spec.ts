@@ -36,3 +36,18 @@ describe('TournamentsService.resolveByes', () => {
     expect(tournaments.update).toHaveBeenLastCalledWith('t', { status: TournamentStatus.COMPLETED });
   });
 });
+
+describe('TournamentsService.assertCanView', () => {
+  const tournament = { id: 't', created_by: u('owner'), participants: [{ user: u('player') }] };
+  const svc = new TournamentsService({ findOne: jest.fn(async () => tournament) } as any,
+    {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+
+  it('lets the owner and participants read the tournament', async () => {
+    await expect(svc.assertCanView('t', 'owner')).resolves.toBe(tournament);
+    await expect(svc.assertCanView('t', 'player')).resolves.toBe(tournament);
+  });
+
+  it('rejects anyone else with 403', async () => {
+    await expect(svc.assertCanView('t', 'stranger')).rejects.toThrow('You are not part of this tournament.');
+  });
+});
