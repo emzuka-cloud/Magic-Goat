@@ -17,5 +17,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
-- [ ] CI (GitHub Actions): lint, test, `npm audit --audit-level=high` per app.
+- [ ] Lint (API): ~2.6k ESLint findings, ~2.3k auto-fixable formatting. Run `npx eslint --fix` in a commit of its own, fix the rest, then add lint to CI.
+- [ ] After the Expo upgrade, raise the client CI audit gate from `critical` to `high`.
 - [ ] e2e tests for ownership checks (403) on every mutating endpoint.
