@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-10-12, seed)
+
+- `npm run seed` works again (it listed entities by hand and missed newer ones; it now loads all of them). It creates 8 test players; with `SEED_OWNER=<your username>` it also creates a play group and a league owned by you with those players. Removed the unusable admin/password user.
+- Removed unused dependencies left from the old local login: `bcrypt`, `passport-local`, `@nestjs/jwt` (and their types).
+
 ### Added (2026-10-12, Commander standings)
 
 - Commander tournaments in a league count toward standings: each player who wins a pod (moves on, or wins the final) gets 3 points and a win; the others in the pod get a loss. A short pod that moved on without playing counts like a bye (win in round 1 only).
