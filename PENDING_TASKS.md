@@ -17,7 +17,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
-- [ ] Move `API_URL` and Cognito IDs into env (`EXPO_PUBLIC_*` / API `.env`) and add `.env.example`.
 - [ ] CI (GitHub Actions): lint, test, `npm audit --audit-level=high` per app.
 - [ ] Root README with setup steps (see `CONTEXT.md` for the current ones).
 - [ ] e2e tests for ownership checks (403) on every mutating endpoint.

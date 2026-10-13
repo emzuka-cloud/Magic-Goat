@@ -5,6 +5,7 @@
  * With SEED_OWNER=<your username> (an account that has signed in at least once) it also creates a play
  * group and a league owned by you with those players, so they show up in your "add player" dropdowns.
  */
+import './load-env'; // must stay first
 import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { User } from './users/entities/user.entity';

@@ -1,9 +1,11 @@
 import { JwksClient } from 'jwks-rsa';
 import { verify, JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 
-// ponytail: hard-coded pool; move to env with the rest of the config (see PENDING_TASKS.md).
-export const COGNITO_ISSUER = 'https://cognito-idp.us-east-2.amazonaws.com/us-east-2_irm6sACmh';
-export const COGNITO_CLIENT_ID = '41cteuobnc1299nlkuh3ei15kc';
+// Defaults are the shared dev pool, so local runs need no .env. Pool and app client IDs are not secrets.
+const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'us-east-2_irm6sACmh';
+const REGION = USER_POOL_ID.split('_')[0]; // pool IDs are "<region>_<id>"
+export const COGNITO_ISSUER = `https://cognito-idp.${REGION}.amazonaws.com/${USER_POOL_ID}`;
+export const COGNITO_CLIENT_ID = process.env.COGNITO_CLIENT_ID || '41cteuobnc1299nlkuh3ei15kc';
 export const COGNITO_JWKS_URI = `${COGNITO_ISSUER}/.well-known/jwks.json`;
 
 const jwks = new JwksClient({ jwksUri: COGNITO_JWKS_URI, cache: true, rateLimit: true, jwksRequestsPerMinute: 5 });
