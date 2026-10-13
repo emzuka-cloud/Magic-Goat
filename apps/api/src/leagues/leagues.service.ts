@@ -5,7 +5,8 @@ import { CreateLeagueDto, UpdateLeagueDto, UpdateStandingDto } from './dto';
 import { League } from './entities/league.entity';
 import { ADJUSTABLE_STATS, AdjustableStat, LeagueParticipant } from './entities/league-participant.entity';
 import { Tournament } from '../tournaments/entities/tournament.entity';
-import { Pairing } from '../tournaments/entities/pairing.entity';
+import { Pairing, resultSeats } from '../tournaments/entities/pairing.entity';
+import { TournamentFormat } from '../tournaments/entities/tournament.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { JoinRequestsService } from '../join-requests/join-requests.service';
@@ -300,11 +301,16 @@ export class LeaguesService {
         for (const tournament of tournaments) {
             const pairings = await this.pairingsRepository.find({
                 where: { tournament: { id: tournament.id } },
-                relations: ['player1', 'player2'],
+                relations: ['player1', 'player2', 'player3', 'player4'],
             });
 
             for (const pairing of pairings) {
                 if (!pairing.result || pairing.result === 'pending') continue;
+
+                if (tournament.format === TournamentFormat.COMMANDER) {
+                    this.scoreCommanderPod(userStats, pairing);
+                    continue;
+                }
 
                 const p1 = pairing.player1;
                 const p2 = pairing.player2;
@@ -374,6 +380,27 @@ export class LeaguesService {
         }
 
         await this.leagueParticipantsRepository.save([...byUser.values()]);
+    }
+
+    /**
+     * Commander pod: every player who wins it (moves on, or wins the final) gets 3 points and a win; the
+     * rest of the pod a loss. A short pod that moved on without playing scores like a bye: a win in round 1,
+     * nothing in later rounds.
+     */
+    private scoreCommanderPod(userStats: Map<string, any>, pairing: Pairing) {
+        const seats = [pairing.player1, pairing.player2, pairing.player3, pairing.player4];
+        const seated = seats.filter((u): u is User => !!u);
+        const winners = new Set(resultSeats(pairing.result).map((s) => seats[s - 1]?.id));
+        const played = seated.length > winners.size;
+        if (!played && pairing.round !== 1) return;
+        for (const user of seated) {
+            this.initUserStats(userStats, user);
+            const stats = userStats.get(user.id);
+            stats.matches_played++;
+            if (played) for (const other of seated) if (other.id !== user.id) stats.opponents.add(other.id);
+            if (winners.has(user.id)) { stats.points += 3; stats.matches_won++; }
+            else stats.matches_lost++;
+        }
     }
 
     private initUserStats(map: Map<string, any>, user: User) {
