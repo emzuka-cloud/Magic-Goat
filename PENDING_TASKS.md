@@ -24,7 +24,7 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 ## Engineering
 
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
-- [ ] `npm audit`: API 74 / client 73 known vulnerabilities (as of 2026-10-12); upgrade Nest/Expo and re-test. Expo also warns `expo` 54.0.27 → ~54.0.37, `expo-font` → ~14.0.12.
+- [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
 - [ ] Remove unused deps now that local auth is gone: `passport-local`, `@nestjs/jwt`, `@types/passport-local`.
 - [ ] Move `API_URL` and Cognito IDs into env (`EXPO_PUBLIC_*` / API `.env`) and add `.env.example`.
 - [ ] CI (GitHub Actions): lint, test, `npm audit --audit-level=high` per app.
