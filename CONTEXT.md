@@ -1,6 +1,6 @@
 # Project Context (for picking up work)
 
-Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, pushed to `origin/security-fixes`, not merged; see `git log main..security-fixes`).
+Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, not merged; see `git log main..security-fixes`). The last 16 commits (2026-10-12) are local only, not pushed yet.
 
 ## What this is
 
@@ -25,6 +25,7 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 - **Join requests**: `join-requests/` module (entity with nullable tournament/league FK). `POST /:kind/:id/join` asks, owner uses `GET /:kind/:id/join-requests` and `POST .../:requestId/approve|decline`. Client: `components/JoinWithCode.tsx` (list headers), `components/JoinRequests.tsx` (owner, detail screens). Express 5: no regex route params, use separate routes.
 - **Offline**: `syncPendingMutations()` (`hooks/useOfflineSync.ts`) sends queued changes; mounted app-wide in `App.tsx` and called before the tournament screen loads. Tournament list/detail are cached with `storage.saveTournament`. To test: stop the API (fetch then throws like offline).
 - **Player search**: `GET /users/search?q=` (username prefix or exact U-ID, min 2 chars, max 10, no emails); client `components/PlayerSearch.tsx` in all Add dialogs.
+- **Home menu**: `components/MenuCarousel.tsx`, a 3D ring (Reanimated + gesture-handler). Items come from `menuItems` in `HomeScreen.tsx`; the ring repeats them to at least `MIN_RING` cards. Feel knobs are the constants at the top (`SNAP_SPRING`, `MOMENTUM`, `DEPTH_FADE`, `TILT`).
 - **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
 - **Dates**: date-only strings via `utils/dates.ts` (`todayLocal`, `formatDateOnly`, `isValidDateOnly`).
 - **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Commander goes through `resolveCommanderPods` (pods send 2 on, final 1; results are seat lists like `p1_p3` / `p3_win`, see `resultSeats`/`seatsResult` in `pairing.entity.ts`).
@@ -47,7 +48,7 @@ cd apps/client && npx expo start --web --port 8081
 ```
 
 - Don't set `CI=1` for Expo — it disables file watching (stale bundle).
-- On Windows, stopping a background `npx` shell can leave the `node` child holding ports 3000/8081.
+- On Windows, stopping a background `npx` shell can leave the `node` child holding ports 3000/8081. Find it with `netstat -ano | grep :8081` and kill the tree: `taskkill //PID <pid> //T //F`.
 - Test data: `cd apps/api && SEED_OWNER=<your username> npm run seed` (sign in once first) gives you 8 test players (player1-8) in a "Seed Group" play group and "Seed League".
 - Sign-in uses the real Cognito pool, so test with a real account.
 
