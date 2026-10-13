@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-10-12, configuration)
+
+- API and client read their settings from environment variables, with `.env.example` in each app. API: `PORT`, `POSTGRES_*`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `CORS_ORIGINS`, `SEED_OWNER` (loaded from `apps/api/.env` with Node's built-in loader; real env vars win). Client: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_AUTH_REDIRECT_URLS`. Defaults are the current dev values, so nothing changes without a `.env`.
+- Removed `@nestjs/config` (it was only loading `.env`).
+
 ### Added (2026-10-12, offline + search)
 
 - **Offline match results**: reporting a result with no connection saves it on the device, shows it right away and sends it automatically when the connection is back (on reconnect, app start, or the next time the tournament is opened). Your tournament list and each tournament you opened are kept on the device, so they open offline with an "Offline" banner. Results the server rejects later are dropped with a message.

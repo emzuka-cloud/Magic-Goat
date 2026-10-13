@@ -1,3 +1,4 @@
+import './load-env'; // must stay first
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { QueryErrorFilter } from './query-error.filter';
