@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-10-12, Commander standings)
+
+- Commander tournaments in a league count toward standings: each player who wins a pod (moves on, or wins the final) gets 3 points and a win; the others in the pod get a loss. A short pod that moved on without playing counts like a bye (win in round 1 only).
+
 ### Fixed (2026-10-12, Commander)
 
 - Commander results could not be saved (the result column only allowed 1v1 values); pod results are now stored.
