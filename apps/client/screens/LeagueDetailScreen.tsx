@@ -12,6 +12,7 @@ import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2, Trophy, Plus } from 'luci
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 import { modalStyles } from '../utils/modalStyles';
+import { JoinRequests } from '../components/JoinRequests';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -456,6 +457,7 @@ export const LeagueDetailScreen = () => {
                     </View>
 
                     {/* Admin Actions */}
+                    {isOwner && <JoinRequests kind="leagues" id={id} onApproved={fetchLeagueDetails} />}
                     {isOwner && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Admin Actions</Text>

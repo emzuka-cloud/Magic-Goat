@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-10-12, join requests)
+
+- **Join with a code, approved by the owner** (tournaments and leagues): owners see a join code and a list of pending requests (approve / decline) on the detail screen; anyone can paste a code from the Tournaments or Leagues list ("Join" button) to send a request. Owners are notified of new requests, requesters are notified of the answer. Tournaments only accept requests before they start and while there is room; asking twice doesn't create a second request.
+- **Move a tournament into or out of a league** after creation (owner, from the tournament screen).
+
+### Security (2026-10-12, join requests)
+
+- `POST /tournaments/:id/join` no longer adds the caller directly; it creates a request the owner must approve.
+
 ### Added (2026-10-12, league standings)
 
 - **Tournaments can belong to a league**: pick one of your leagues when creating a tournament, or use "New League Tournament" on the league screen. The league screen lists its tournaments, and a tournament shows its league. League members can open the league's tournaments.

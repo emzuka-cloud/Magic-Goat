@@ -8,6 +8,7 @@ import { Tournament } from '../tournaments/entities/tournament.entity';
 import { Pairing } from '../tournaments/entities/pairing.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { JoinRequestsService } from '../join-requests/join-requests.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 
 type Results = Record<AdjustableStat, number>;
@@ -42,7 +43,50 @@ export class LeaguesService {
         @InjectRepository(Pairing)
         private pairingsRepository: Repository<Pairing>,
         private notificationsService: NotificationsService,
+        private joinRequests: JoinRequestsService,
     ) { }
+
+    /** Anyone with the league's code can ask to join; the owner approves or declines. */
+    async requestToJoin(leagueId: string, user: User) {
+        const league = await this.findOne(leagueId);
+        const isMember = league.created_by?.id === user.id || await this.leagueParticipantsRepository.exists({
+            where: { league: { id: leagueId }, user: { id: user.id } },
+        });
+        if (isMember) throw new BadRequestException('You are already in this league.');
+        const { request, created } = await this.joinRequests.request({ league: { id: leagueId } }, user);
+        if (created && league.created_by) {
+            await this.notificationsService.create(
+                league.created_by.id,
+                NotificationType.LEAGUE_JOIN_REQUEST,
+                'Join request',
+                `${user.username} asked to join "${league.name}"`,
+                league.id,
+            );
+        }
+        return { id: request.id, status: request.status, league: { id: league.id, name: league.name } };
+    }
+
+    async pendingJoinRequests(leagueId: string) {
+        const requests = await this.joinRequests.pending({ league: { id: leagueId } });
+        return requests.map((r) => ({ id: r.id, created_at: r.created_at, user: { id: r.user.id, username: r.user.username } }));
+    }
+
+    async answerJoinRequest(leagueId: string, requestId: string, approve: boolean) {
+        const league = await this.findOne(leagueId);
+        const request = await this.joinRequests.decide(requestId, { league: { id: leagueId } }, approve, async (r) => {
+            if (approve) await this.addMember(leagueId, r.user.id); // tells them they're in
+        });
+        if (!approve) {
+            await this.notificationsService.create(
+                request.user.id,
+                NotificationType.JOIN_DECLINED,
+                'Join request declined',
+                `Your request to join "${league.name}" was declined.`,
+                league.id,
+            );
+        }
+        return { id: request.id, status: request.status };
+    }
 
     private assertValidDates(dates: (Date | string | undefined | null)[]) {
         if (dates.some(d => d != null && isNaN(new Date(d).getTime()))) {

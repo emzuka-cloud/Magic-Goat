@@ -7,6 +7,7 @@ import { API_URL, getAuthHeaders } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { useAuth } from '../contexts/AuthContext';
 import { Plus, Trophy, ArrowRight, ArrowLeft } from 'lucide-react-native';
+import { JoinWithCode } from '../components/JoinWithCode';
 
 type TournamentListScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentList'>;
 
@@ -87,12 +88,16 @@ export const TournamentListScreen = () => {
                         </TouchableOpacity>
                         <Text style={styles.title}>Tournaments</Text>
                     </View>
-                    <TouchableOpacity
-                        style={styles.createButton}
-                        onPress={() => navigation.navigate('CreateTournament')}
-                    >
-                        <Plus size={24} color="white" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <JoinWithCode kind="tournaments" />
+                        <TouchableOpacity
+                            style={styles.createButton}
+                            onPress={() => navigation.navigate('CreateTournament')}
+                            accessibilityLabel="Create tournament"
+                        >
+                            <Plus size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {loading ? (

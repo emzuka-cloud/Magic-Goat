@@ -17,6 +17,12 @@ export class CreateTournamentDto {
     leagueId?: string;
 }
 
+export class SetLeagueDto {
+    /** A league you own, or null to take the tournament out of its league. */
+    @IsOptional() @IsUUID()
+    leagueId?: string | null;
+}
+
 export class GroupIdDto {
     @IsUUID()
     groupId: string;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, ScrollView } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,7 +7,7 @@ import { API_URL, getAuthHeaders } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { ArrowLeft, Users, Trophy } from 'lucide-react-native';
 import { Dropdown } from '../components/Dropdown';
-import { useAuth } from '../contexts/AuthContext';
+import { useMyLeagues } from '../hooks/useMyLeagues';
 
 type CreateTournamentNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateTournament'>;
 
@@ -18,23 +18,9 @@ export const CreateTournamentScreen = () => {
     const [format, setFormat] = useState('single_elimination');
     const [loading, setLoading] = useState(false);
     const route = useRoute<RouteProp<RootStackParamList, 'CreateTournament'>>();
-    const { user } = useAuth();
     // Results of a league tournament count toward that league's standings. Only your own leagues.
     const [leagueId, setLeagueId] = useState(route.params?.leagueId ?? '');
-    const [myLeagues, setMyLeagues] = useState<{ id: string; name: string }[]>([]);
-
-    useEffect(() => {
-        (async () => {
-            try {
-                const res = await fetch(`${API_URL}/leagues`, { headers: await getAuthHeaders() });
-                if (!res.ok) return;
-                const leagues: { id: string; name: string; created_by?: { username: string } }[] = await res.json();
-                setMyLeagues(leagues.filter(l => l.created_by?.username === user?.username));
-            } catch {
-                // Offline: the league picker just stays hidden.
-            }
-        })();
-    }, [user?.username]);
+    const myLeagues = useMyLeagues();
 
     const handleCreate = async () => {
         if (!name.trim()) {

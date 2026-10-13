@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, Query, Res, Delete } from '@nestjs/common';
 import { TournamentsService } from './tournaments.service';
 import { AuthGuard } from '@nestjs/passport';
-import { AddPersonDto, CreatePairingDto, CreateTournamentDto, ExportQueryDto, GroupIdDto, InvitationDto, PairingResultDto, StartTimerDto } from './dto';
+import { AddPersonDto, CreatePairingDto, CreateTournamentDto, ExportQueryDto, GroupIdDto, InvitationDto, PairingResultDto, SetLeagueDto, StartTimerDto } from './dto';
 
 @Controller('tournaments')
 export class TournamentsController {
@@ -11,6 +11,13 @@ export class TournamentsController {
     @Post()
     create(@Body() createTournamentDto: CreateTournamentDto, @Request() req: any) {
         return this.tournamentsService.create(createTournamentDto, req.user);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Put(':id/league')
+    async setLeague(@Param('id') id: string, @Body() body: SetLeagueDto, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
+        return this.tournamentsService.setLeague(id, body.leagueId, req.user.id);
     }
 
     @UseGuards(AuthGuard('jwt'))
@@ -59,10 +66,32 @@ export class TournamentsController {
         return this.tournamentsService.assertCanView(id, req.user.id);
     }
 
+    // Anyone signed in can ask; only the owner can let them in.
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/join')
     join(@Param('id') id: string, @Request() req: any) {
-        return this.tournamentsService.joinTournament(id, req.user);
+        return this.tournamentsService.requestToJoin(id, req.user);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Get(':id/join-requests')
+    async joinRequests(@Param('id') id: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
+        return this.tournamentsService.pendingJoinRequests(id);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post(':id/join-requests/:requestId/approve')
+    async approveJoinRequest(@Param('id') id: string, @Param('requestId') requestId: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
+        return this.tournamentsService.answerJoinRequest(id, requestId, true);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post(':id/join-requests/:requestId/decline')
+    async declineJoinRequest(@Param('id') id: string, @Param('requestId') requestId: string, @Request() req: any) {
+        await this.tournamentsService.assertOwner(id, req.user.id);
+        return this.tournamentsService.answerJoinRequest(id, requestId, false);
     }
 
     @UseGuards(AuthGuard('jwt'))
