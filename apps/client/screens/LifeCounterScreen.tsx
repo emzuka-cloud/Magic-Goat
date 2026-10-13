@@ -7,6 +7,7 @@ import { Settings, RotateCcw, Home } from 'lucide-react-native';
 import { SettingsModal } from '../components/LifeCounter/SettingsModal';
 import { layouts } from '../utils/layouts';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { confirmAction } from '../utils/errors';
 
 export const LifeCounterScreen = () => {
     const [playerCount, setPlayerCount] = useState(4);
@@ -120,7 +121,8 @@ export const LifeCounterScreen = () => {
                     <TouchableOpacity style={styles.menuButton} onPress={() => navigation.goBack()}>
                         <Home color="white" size={24} />
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuButton} onPress={() => resetGame(playerCount, startingLife)}>
+                    <TouchableOpacity style={styles.menuButton} onPress={() => confirmAction('Reset Game', 'Reset every life total and counter?', 'Reset', () => resetGame(playerCount, startingLife))}
+                        accessibilityLabel="Reset game">
                         <RotateCcw color="white" size={24} />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.menuButton} onPress={() => setShowSettings(true)}>

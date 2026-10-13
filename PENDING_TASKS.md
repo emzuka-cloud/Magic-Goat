@@ -5,13 +5,9 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 ## UI / UX
 
-- [ ] **Consistent screens**: some screens show two stacked headers (the navigator's plus the screen's own); the "+" button is bottom-right on Leagues but top-right elsewhere; dialogs use three different styles. Pick one header, one FAB position, one modal style.
-- [ ] **Home tiles** grow very large on wide browser windows; cap tile size / max content width (`utils/layouts.ts`).
-- [ ] **Self-notifications**: users get notified about actions they did themselves (e.g. adding their own play group to a tournament). Skip the actor when creating notifications.
-- [ ] **Life counter reset** has no confirmation; one stray tap wipes the game.
-- [ ] **Silent successes on web**: "Member added" etc. use `Alert.alert`, which does nothing on web. Use a toast or rely on the list updating.
-- [ ] **League standings table**: "W-D-L" and "Actions" column headers run together.
-- [ ] **Starts/Started date** wording and format could be unified across league list and detail.
+- [ ] Detail screens still inline their own web/native confirm branches; switch them to `confirmAction` (`utils/errors.ts`) when touching them.
+- [ ] `InvitationsScreen` is registered but nothing navigates to it (and it has no back button now that the stack header is off). Link it from Notifications or remove it.
+- [ ] Visual check on a real phone (native) of the header/modal changes; web was verified.
 
 ## Features / logic
 

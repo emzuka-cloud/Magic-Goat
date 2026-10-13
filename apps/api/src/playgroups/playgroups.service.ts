@@ -119,6 +119,7 @@ export class PlayGroupsService {
                 'Added to Play Group',
                 `You have been added to the play group "${group.name}"`,
                 group.id,
+                group.ownerId, // only the owner can add people
             );
 
             return savedGroup;

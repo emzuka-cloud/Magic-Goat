@@ -107,6 +107,7 @@ export class TournamentsService {
             'Added to Tournament',
             `You have been added to the tournament "${tournament.name}"`,
             tournament.id,
+            tournament.created_by?.id, // only the owner can add people
         );
 
         return savedParticipant;
@@ -209,6 +210,7 @@ export class TournamentsService {
                     'Added to Tournament',
                     `You have been added to the tournament "${tournament.name}" via your playgroup`,
                     tournament.id,
+                    tournament.created_by?.id,
                 );
             }
         }

@@ -47,8 +47,8 @@ const AppContent = () => {
       <StatusBar style="light" hidden />
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: '#2a2a2a' },
-          headerTintColor: '#fff',
+          // Every screen draws its own header (title + back button); the stack header doubled it up.
+          headerShown: false,
           contentStyle: { backgroundColor: '#1a1a1a' },
         }}
       >

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, useWindowDimensions, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -11,15 +11,15 @@ import { useFocusEffect } from '@react-navigation/native';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
-const { width } = Dimensions.get('window');
-// Make buttons approx 40% of screen width to ensure 2 fit comfortably with spacing
-const BUTTON_SIZE = width * 0.4;
+// Two tiles per row on phones (40% of the width each); capped so they stay tile-sized on wide browser windows.
+const MAX_TILE_SIZE = 180;
 
 export const HomeScreen = () => {
     const navigation = useNavigation<HomeScreenNavigationProp>();
     const { signOut } = useAuth();
     const [menuVisible, setMenuVisible] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const tileSize = Math.min(useWindowDimensions().width * 0.4, MAX_TILE_SIZE);
 
     const fetchUnreadCount = async () => {
         try {
@@ -160,7 +160,7 @@ export const HomeScreen = () => {
                                 key={index}
                                 style={[
                                     styles.button,
-                                    { backgroundColor: item.color }
+                                    { backgroundColor: item.color, width: tileSize, height: tileSize }
                                 ]}
                                 onPress={() => {
                                     if (item.route) {
@@ -269,8 +269,6 @@ const styles = StyleSheet.create({
         gap: 20, // Slightly reduced gap
     },
     button: {
-        width: BUTTON_SIZE,
-        height: BUTTON_SIZE,
         borderRadius: 16,
         padding: 16,
         justifyContent: 'center',

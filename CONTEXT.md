@@ -19,6 +19,8 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 - **Validation**: every body/query is a DTO class (`<module>/dto.ts`, `class-validator`); global `ValidationPipe({ whitelist: true, transform: true })` in `main.ts`. Malformed UUIDs become 400 via `query-error.filter.ts`. New routes need a DTO, or the pipe skips validation.
 - **Errors (API)**: throw Nest HTTP exceptions with a user-readable message — never `throw new Error(...)` (becomes a 500).
 - **Errors (client)**: on a failed fetch use `showApiError(res, 'Could not …')`; on a thrown fetch use `showError(NETWORK_ERROR)` (`utils/errors.ts`). Works on web.
+- **UI**: no stack header (each screen draws its own header + back button); create "+" goes top-right in the header; dialogs use `utils/modalStyles.ts`; destructive actions use `confirmAction` (`utils/errors.ts`); no success popups when a list visibly updates.
+- **Notifications**: pass the actor as the last arg of `NotificationsService.create`; it skips notifying them.
 - **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
 - **Dates**: date-only strings via `utils/dates.ts` (`todayLocal`, `formatDateOnly`, `isValidDateOnly`).
 - **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Single elimination only.
@@ -50,6 +52,7 @@ cd apps/client && npx expo start --web --port 8081
 - API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution, completion, view check), events.gateway.spec (socket auth + room check), validation.spec (DTOs + invalid-ID filter).
 - Type-check: `npx tsc --noEmit -p tsconfig.json` in each app.
 - Browser testing on web: `window.alert`/`confirm` block automation; override them first (`window.alert = m => console.log(m)`).
+- If the Chrome window is in the background, screenshots time out and `requestAnimationFrame` stops, so modals look stuck open. Measure via the DOM, or bring the window to the front. To test widths, load the app in a same-origin iframe of the wanted width.
 
 ## Where things are tracked
 

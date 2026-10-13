@@ -6,11 +6,12 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
-import { formatDateOnly } from '../utils/dates';
+import { startLabel } from '../utils/dates';
 import { useAuth, getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2 } from 'lucide-react-native';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { modalStyles } from '../utils/modalStyles';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -343,7 +344,7 @@ export const LeagueDetailScreen = () => {
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.headerTitle}>{league.name}</Text>
-                            <Text style={styles.headerSubtitle}>Started: {formatDateOnly(league.start_date)}</Text>
+                            <Text style={styles.headerSubtitle}>{startLabel(league.start_date)}</Text>
                         </View>
                     </View>
                 </View>
@@ -646,8 +647,8 @@ const styles = StyleSheet.create({
     colPlayer: { flex: 1 },
     colPoints: { width: 40, textAlign: 'center', fontWeight: 'bold' },
     colOMW: { width: 60, textAlign: 'center' },
-    colRecord: { width: 60, textAlign: 'right' },
-    colActions: { width: 70, alignItems: 'center', justifyContent: 'center' },
+    colRecord: { width: 60, textAlign: 'center' },
+    colActions: { width: 70, alignItems: 'center', justifyContent: 'center', textAlign: 'center' },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -695,33 +696,15 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
     },
-    modalBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalContent: {
-        backgroundColor: '#1a1a2e',
-        width: '90%',
-        maxWidth: 400,
-        borderRadius: 12,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: '#2e1065',
-    },
+    modalBackdrop: modalStyles.overlay,
+    modalContent: modalStyles.card,
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 20,
     },
-    modalTitle: {
-        color: 'white',
-        fontSize: 20,
-        fontWeight: 'bold',
-        flex: 1,
-    },
+    modalTitle: { ...modalStyles.title, flex: 1 },
     modalLabel: {
         color: '#aaa',
         marginBottom: 8,
