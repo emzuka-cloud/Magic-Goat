@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security (2026-10-12, second pass)
+
+- Reading a tournament (and its pairings), league (and its standings) or play group now requires signing in and being its owner or a member (403 otherwise). Standings are no longer recalculated for anonymous callers.
+- Only Cognito ID tokens issued for this app's client are accepted (`aud` and `token_use` checked).
+- Live updates (WebSocket) require a valid sign-in; sockets can only join tournament rooms the user belongs to.
+- CORS allows only known browser origins (`CORS_ORIGINS`, default `http://localhost:8081`) and no longer sends credentials headers.
+- The client no longer logs the Cognito session to the console.
+
+### Fixed (2026-10-12, second pass)
+
+- Real-time invitations never arrived: nothing joined the `user_<id>` room, and the socket hook never re-rendered with its connection. Sockets now join the user's room on connect.
+
 ### Security (2026-10-12)
 
 - Cognito users are matched by their token `sub` only; an existing account is linked by email only when Cognito reports the email as verified (unverified collisions return 409). Prevents taking over an account by registering the same username.

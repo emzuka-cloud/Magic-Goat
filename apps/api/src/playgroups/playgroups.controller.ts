@@ -20,8 +20,8 @@ export class PlayGroupsController {
     }
 
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.playGroupsService.findOne(id);
+    findOne(@Param('id') id: string, @Request() req: any) {
+        return this.playGroupsService.assertCanView(id, req.user.id);
     }
 
     @Post(':id/members')

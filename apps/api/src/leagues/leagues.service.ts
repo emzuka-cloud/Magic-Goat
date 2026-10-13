@@ -69,6 +69,17 @@ export class LeaguesService {
         if (league.created_by?.id !== userId) throw new ForbiddenException('Only the league owner can do this.');
     }
 
+    /** Owner or participant; returns the league so callers don't load it twice. */
+    async assertCanView(leagueId: string, userId: string): Promise<League> {
+        const league = await this.findOne(leagueId);
+        if (league.created_by?.id === userId) return league;
+        const isMember = await this.leagueParticipantsRepository.exists({
+            where: { league: { id: leagueId }, user: { id: userId } },
+        });
+        if (!isMember) throw new ForbiddenException('You are not part of this league.');
+        return league;
+    }
+
     async update(id: string, updateLeagueDto: Partial<League>): Promise<League> {
         const league = await this.findOne(id);
         // Whitelist editable fields; never let the body overwrite id/created_by/relations.
@@ -188,7 +199,7 @@ export class LeaguesService {
     }
 
     async getStandings(leagueId: string): Promise<LeagueParticipant[]> {
-        // Trigger update before returning standings (for MVP simplicity)
+        // ponytail: recalculates (DB writes) on every read; members-only now, move to result-write time if load matters.
         await this.updateStandings(leagueId);
 
         return this.leagueParticipantsRepository.find({

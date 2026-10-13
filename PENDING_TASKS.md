@@ -16,15 +16,14 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 ## Features / logic
 
 - [ ] **Commander tournaments** (4-player pods): no automatic completion/champion and no bye resolution (`resolveByes` skips them).
-- [ ] **League standings source of truth**: standings are recalculated from tournament results every time the league is opened, overwriting manual edits for players who have results. Decide manual vs computed.
-- [ ] **Invitations** are emitted to `user_<id>` socket rooms that nothing joins; join on authenticated socket connect.
+- [ ] **League standings source of truth**: standings are recalculated from tournament results every time the league is opened (DB writes on a GET), overwriting manual edits for players who have results. Decide manual vs computed; if computed, recalculate when a result is reported instead.
 - [ ] **`seed.ts` is broken**: its entity list is missing `Notification` (and `PlayGroup`, `LeagueParticipant`), so it crashes on start.
 - [ ] **Offline sync hook** (`useOfflineSync`) is not mounted anywhere and nothing calls `storage.queueMutation`.
 - [ ] Add a user search endpoint so the player dropdowns can find people outside your play groups.
 
 ## Engineering
 
-- [ ] Global `ValidationPipe({ whitelist: true })` + DTO classes (`class-validator`) instead of `any` bodies.
+- [ ] Global `ValidationPipe({ whitelist: true })` + DTO classes (`class-validator`) instead of `any` bodies. Also `ParseUUIDPipe` on `:id` params (a malformed ID is currently a 500).
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit`: API 74 / client 73 known vulnerabilities (as of 2026-10-12); upgrade Nest/Expo and re-test. Expo also warns `expo` 54.0.27 → ~54.0.37, `expo-font` → ~14.0.12.
 - [ ] Remove unused deps now that local auth is gone: `passport-local`, `@nestjs/jwt`, `@types/passport-local`.

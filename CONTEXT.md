@@ -1,6 +1,6 @@
 # Project Context (for picking up work)
 
-Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, **not pushed**; see `git log main..security-fixes`).
+Last session: 2026-10-12. Branch `security-fixes` (ahead of `main`, pushed to `origin/security-fixes`, not merged; see `git log main..security-fixes`).
 
 ## What this is
 
@@ -11,7 +11,10 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 
 ## Conventions established
 
-- **Authorization**: every mutating route calls `<service>.assertOwner(id, req.user.id)` before acting (tournaments, leagues, playgroups). Notifications are scoped by `userId` in the query.
+- **Authorization**: every mutating route calls `<service>.assertOwner(id, req.user.id)` before acting; every read-by-id route calls `<service>.assertCanView(id, req.user.id)` (owner or member). Notifications are scoped by `userId` in the query.
+- **Tokens**: only Cognito ID tokens for this app client (`auth/cognito.ts` holds pool/client IDs; `verifyIdToken` is used by the socket gateway, `JwtStrategy` by HTTP).
+- **Sockets**: client sends the ID token as `auth.token` (`hooks/useSocket.ts`); server joins `user_<id>` on connect and checks membership on `join_tournament`.
+- **CORS**: `src/cors.ts`, allowlist from `CORS_ORIGINS` (comma-separated, default `http://localhost:8081`). Use `localhost`, not `127.0.0.1`, for the web client.
 - **Users**: `findOrCreateUser` (users.service.ts) matches by Cognito `sub`; links by email only if `email_verified`. `password_hash` and `email` are `select: false`.
 - **Errors (API)**: throw Nest HTTP exceptions with a user-readable message — never `throw new Error(...)` (becomes a 500).
 - **Errors (client)**: on a failed fetch use `showApiError(res, 'Could not …')`; on a thrown fetch use `showError(NETWORK_ERROR)` (`utils/errors.ts`). Works on web.
@@ -43,7 +46,7 @@ cd apps/client && npx expo start --web --port 8081
 
 ## Tests
 
-- API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution + completion).
+- API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution, completion, view check), events.gateway.spec (socket auth + room check).
 - Type-check: `npx tsc --noEmit -p tsconfig.json` in each app.
 - Browser testing on web: `window.alert`/`confirm` block automation; override them first (`window.alert = m => console.log(m)`).
 

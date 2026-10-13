@@ -11,9 +11,7 @@ export const API_URL = LOCALHOST;
 export async function getAuthHeaders(): Promise<Record<string, string>> {
     try {
         const session = await fetchAuthSession();
-        console.log('Auth Session:', session);
         const token = session.tokens?.idToken?.toString();
-        console.log('Token:', token ? 'Found' : 'Missing');
 
         if (token) {
             return {
