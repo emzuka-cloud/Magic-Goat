@@ -4,7 +4,9 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
-import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
+import { showApiError, showError, showMessage, NETWORK_ERROR } from '../utils/errors';
+import { storage } from '../utils/storage';
+import { syncPendingMutations } from '../hooks/useOfflineSync';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
@@ -13,6 +15,7 @@ import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 import { useMyLeagues } from '../hooks/useMyLeagues';
 import { modalStyles } from '../utils/modalStyles';
 import { JoinRequests } from '../components/JoinRequests';
+import { PlayerSearch } from '../components/PlayerSearch';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -59,6 +62,7 @@ export const TournamentDetailScreen = () => {
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [pairings, setPairings] = useState<Pairing[]>([]);
     const [loading, setLoading] = useState(true);
+    const [offline, setOffline] = useState(false); // showing a cached copy / results queued on this device
     const [refreshing, setRefreshing] = useState(false);
 
     // Modals
@@ -94,6 +98,7 @@ export const TournamentDetailScreen = () => {
 
     const fetchData = useCallback(async () => {
         try {
+            await syncPendingMutations(); // results saved offline go first, so the reload includes them
             const headers = await getAuthHeaders();
             const [tRes, pRes] = await Promise.all([
                 fetch(`${API_URL}/tournaments/${id}`, { headers }),
@@ -103,15 +108,25 @@ export const TournamentDetailScreen = () => {
             if (tRes.ok) {
                 const tData = await tRes.json();
                 setTournament(tData);
+                if (pRes.ok) {
+                    const pData = await pRes.json();
+                    setPairings(pData);
+                    storage.saveTournament(id, { tournament: tData, pairings: pData }); // for offline viewing
+                }
+                setOffline(false);
             } else {
                 await showApiError(tRes, 'Could not load this tournament.');
             }
-            if (pRes.ok) {
-                const pData = await pRes.json();
-                setPairings(pData);
-            }
         } catch (error) {
-            showError(NETWORK_ERROR);
+            // No connection: show the last copy loaded on this device, if any.
+            const cached = await storage.getTournament(id);
+            if (cached) {
+                setTournament(cached.tournament);
+                setPairings(cached.pairings);
+                setOffline(true);
+            } else {
+                showError(NETWORK_ERROR);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -298,7 +313,16 @@ export const TournamentDetailScreen = () => {
                 await showApiError(res, 'Could not save the match result.');
             }
         } catch (e) {
-            showError(NETWORK_ERROR);
+            // Offline at the venue: keep the result on this device and send it when the connection is back.
+            await storage.queueMutation({ type: 'report_result', payload: { tournamentId: id, pairingId, result } });
+            const updated = pairings.map(p => (p.id === pairingId ? { ...p, result } : p));
+            setPairings(updated);
+            storage.saveTournament(id, { tournament, pairings: updated });
+            setResultModalVisible(false);
+            setSelectedMatch(null);
+            setSelectedWinners([]);
+            setOffline(true);
+            showMessage('Saved offline', 'No connection. The result is saved on this device and will be sent automatically when you are back online.');
         }
     };
 
@@ -338,10 +362,10 @@ export const TournamentDetailScreen = () => {
                 <Text style={styles.sectionTitle}>Participants ({tournament?.participants.length}/{tournament?.capacity})</Text>
                 {isOwner && (
                     <View style={styles.headerButtons}>
-                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddUserModalVisible(true)}>
+                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddUserModalVisible(true)} accessibilityLabel="Add participant">
                             <UserPlus size={20} color="#a855f7" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddGroupModalVisible(true)}>
+                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddGroupModalVisible(true)} accessibilityLabel="Add play group">
                             <Users size={20} color="#a855f7" />
                         </TouchableOpacity>
                     </View>
@@ -478,6 +502,9 @@ export const TournamentDetailScreen = () => {
                     <View style={{ width: 24 }} />
                 </View>
 
+                {offline && (
+                    <Text style={styles.offlineBanner}>Offline: showing the last saved copy. Results you report are sent when you reconnect.</Text>
+                )}
                 <ScrollView
                     contentContainerStyle={styles.content}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#a855f7" />}
@@ -551,13 +578,7 @@ export const TournamentDetailScreen = () => {
                                 onChange={setIdentifier}
                             />
                             <Text style={styles.orText}>or type a username, email or user ID</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Username, email or U-ID"
-                                placeholderTextColor="#666"
-                                value={identifier}
-                                onChangeText={setIdentifier}
-                            />
+                            <PlayerSearch inputStyle={styles.input} value={identifier} onChange={setIdentifier} />
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity onPress={() => setAddUserModalVisible(false)} style={styles.cancelButton}>
                                     <Text style={styles.cancelText}>Cancel</Text>
@@ -673,6 +694,7 @@ const styles = StyleSheet.create({
     podHeader: { backgroundColor: '#2e1065', padding: 8, alignItems: 'center' },
     podTitle: { color: '#a855f7', fontWeight: 'bold', fontSize: 12 },
     leagueLink: { color: '#a855f7', fontSize: 14, marginTop: 4 },
+    offlineBanner: { backgroundColor: '#422006', color: '#facc15', fontSize: 13, paddingVertical: 8, paddingHorizontal: 16 },
     modalOverlay: modalStyles.overlay,
     modalContent: modalStyles.card,
     modalTitle: { ...modalStyles.title, marginBottom: 24 },

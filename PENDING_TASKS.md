@@ -12,8 +12,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 ## Features / logic
 
 - [ ] League standings recalculate on every GET (members only). Fine at this size; recalculate on result/delete instead if leagues grow large.
-- [ ] **Offline sync hook** (`useOfflineSync`) is not mounted anywhere and nothing calls `storage.queueMutation`.
-- [ ] Add a user search endpoint so the player dropdowns can find people outside your play groups.
 
 ## Engineering
 

@@ -11,6 +11,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
 import { modalStyles } from '../utils/modalStyles';
+import { PlayerSearch } from '../components/PlayerSearch';
 
 type PlayGroupDetailRouteProp = RouteProp<RootStackParamList, 'PlayGroupDetail'>;
 type PlayGroupDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlayGroupDetail'>;
@@ -320,14 +321,7 @@ export const PlayGroupDetailScreen = () => {
                                 onChange={setNewMemberId}
                             />
 
-                            <TextInput
-                                style={styles.modalInput}
-                                placeholder="Username / ID"
-                                placeholderTextColor="#666"
-                                value={newMemberId}
-                                onChangeText={setNewMemberId}
-                                autoCapitalize="none"
-                            />
+                            <PlayerSearch inputStyle={styles.modalInput} value={newMemberId} onChange={setNewMemberId} />
 
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity

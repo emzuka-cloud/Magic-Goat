@@ -1,8 +1,11 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Not, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { User } from './entities/user.entity';
+
+/** Escape LIKE wildcards so "%" or "_" in a search are matched literally. */
+export const likePrefix = (text: string) => text.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
 
 @Injectable()
 export class UsersService {
@@ -10,6 +13,21 @@ export class UsersService {
         @InjectRepository(User)
         private usersRepository: Repository<User>,
     ) { }
+
+    // ponytail: ILIKE prefix scan, no index; add a lower(username) index if the user table gets large.
+    async search(q: string, excludeUserId: string): Promise<Pick<User, 'id' | 'username' | 'custom_id'>[]> {
+        const text = q.trim();
+        const users = await this.usersRepository.find({
+            where: [
+                { username: ILike(likePrefix(text)), id: Not(excludeUserId) },
+                { custom_id: text.toUpperCase(), id: Not(excludeUserId) },
+            ],
+            select: ['id', 'username', 'custom_id'],
+            order: { username: 'ASC' },
+            take: 10,
+        });
+        return users.map(({ id, username, custom_id }) => ({ id, username, custom_id }));
+    }
 
     async findOrCreateUser(payload: any): Promise<User> {
         const { sub: id, email, username, 'cognito:username': cognitoUsername } = payload;
