@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-10-12, home menu)
+
+- The home menu is a 3D carousel (after React Bits' Circular Carousel, cylinder style): swipe to turn it with momentum and it snaps to a card; tap a side card to bring it forward, tap the front card to open it. Arrow buttons below it for mouse and keyboard users. Unread notifications show as a badge on the Notifications card. Respects the system "reduce motion" setting (snaps without animating).
+
 ### Changed (2026-10-12, configuration)
 
 - GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR: API type-check, unit tests, build and production-dependency audit (high); client type-check and audit (critical, until the Expo upgrade).

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, useWindowDimensions, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { MenuCarousel } from '../components/MenuCarousel';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -11,15 +12,11 @@ import { useFocusEffect } from '@react-navigation/native';
 
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
-// Two tiles per row on phones (40% of the width each); capped so they stay tile-sized on wide browser windows.
-const MAX_TILE_SIZE = 180;
-
 export const HomeScreen = () => {
     const navigation = useNavigation<HomeScreenNavigationProp>();
     const { signOut } = useAuth();
     const [menuVisible, setMenuVisible] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
-    const tileSize = Math.min(useWindowDimensions().width * 0.4, MAX_TILE_SIZE);
 
     const fetchUnreadCount = async () => {
         try {
@@ -154,26 +151,14 @@ export const HomeScreen = () => {
                 </View>
 
                 <ScrollView contentContainerStyle={styles.scrollContent}>
-                    <View style={styles.grid}>
-                        {menuItems.map((item, index) => (
-                            <TouchableOpacity
-                                key={index}
-                                style={[
-                                    styles.button,
-                                    { backgroundColor: item.color, width: tileSize, height: tileSize }
-                                ]}
-                                onPress={() => {
-                                    if (item.route) {
-                                        // @ts-ignore - Dynamic routing
-                                        navigation.navigate(item.route);
-                                    }
-                                }}
-                            >
-                                <item.Icon color="white" size={32} style={styles.icon} />
-                                <Text style={styles.buttonText}>{item.title}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                    <MenuCarousel
+                        items={menuItems.map(item => ({
+                            ...item,
+                            badge: item.route === 'Notifications' ? unreadCount : undefined,
+                            // @ts-ignore - dynamic route names
+                            onOpen: () => navigation.navigate(item.route),
+                        }))}
+                    />
                 </ScrollView>
             </SafeAreaView>
         </View>
@@ -261,31 +246,5 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingBottom: 32,
         justifyContent: 'center', // Center content vertically
-    },
-    grid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'center', // Centers the items, putting the last one in the middle
-        gap: 20, // Slightly reduced gap
-    },
-    button: {
-        borderRadius: 16,
-        padding: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-    },
-    icon: {
-        marginBottom: 12,
-    },
-    buttonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-        textAlign: 'center',
     },
 });
