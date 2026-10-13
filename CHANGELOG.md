@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (2026-10-12, configuration)
 
+- Root `README.md` with setup, configuration, test data and tests; the API README (Nest template) now points to it. The API declares Node >= 20.12.
 - API and client read their settings from environment variables, with `.env.example` in each app. API: `PORT`, `POSTGRES_*`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `CORS_ORIGINS`, `SEED_OWNER` (loaded from `apps/api/.env` with Node's built-in loader; real env vars win). Client: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_AUTH_REDIRECT_URLS`. Defaults are the current dev values, so nothing changes without a `.env`.
 - Removed `@nestjs/config` (it was only loading `.env`).
 
