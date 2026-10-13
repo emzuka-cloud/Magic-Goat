@@ -10,7 +10,7 @@ const tournaments = { update: jest.fn() };
 
 function resolve(pairings: Pairing[]) {
   const repo = { find: jest.fn(async () => pairings), save: jest.fn(async (x) => x) };
-  const svc = new TournamentsService(tournaments as any, {} as any, repo as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  const svc = new TournamentsService(tournaments as any, {} as any, repo as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
   return (svc as any).resolveByes('t', TournamentFormat.SINGLE_ELIMINATION);
 }
 
@@ -41,7 +41,7 @@ describe('TournamentsService.assertCanView', () => {
   const tournament = { id: 't', created_by: u('owner'), participants: [{ user: u('player') }] };
   const leagueMembers = { exists: jest.fn(async ({ where }) => where.user.id === 'leaguer') };
   const svc = new TournamentsService({ findOne: jest.fn(async () => tournament) } as any,
-    {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, leagueMembers as any);
+    {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, leagueMembers as any, {} as any);
 
   it('lets the owner and participants read the tournament', async () => {
     await expect(svc.assertCanView('t', 'owner')).resolves.toBe(tournament);

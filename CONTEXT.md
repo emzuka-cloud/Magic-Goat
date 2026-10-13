@@ -22,6 +22,7 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 - **UI**: no stack header (each screen draws its own header + back button); create "+" goes top-right in the header; dialogs use `utils/modalStyles.ts`; destructive actions use `confirmAction` (`utils/errors.ts`); no success popups when a list visibly updates.
 - **Notifications**: pass the actor as the last arg of `NotificationsService.create`; it skips notifying them.
 - **League standings**: stored totals = tournament results + owner adjustment (`adj_*` columns). `applyResults`/`setTotals` in `leagues.service.ts`; PATCH sets totals (stored as diff), DELETE `.../standings/:userId/adjustments` resets. Tournaments link to a league at creation (`leagueId`, league owner only).
+- **Join requests**: `join-requests/` module (entity with nullable tournament/league FK). `POST /:kind/:id/join` asks, owner uses `GET /:kind/:id/join-requests` and `POST .../:requestId/approve|decline`. Client: `components/JoinWithCode.tsx` (list headers), `components/JoinRequests.tsx` (owner, detail screens). Express 5: no regex route params, use separate routes.
 - **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
 - **Dates**: date-only strings via `utils/dates.ts` (`todayLocal`, `formatDateOnly`, `isValidDateOnly`).
 - **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Single elimination only.

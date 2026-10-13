@@ -75,6 +75,34 @@ export class LeaguesController {
         return this.leaguesService.removeMember(id, userId);
     }
 
+    // Anyone signed in can ask; only the owner can let them in.
+    @UseGuards(AuthGuard('jwt'))
+    @Post(':id/join')
+    join(@Param('id') id: string, @Request() req: any) {
+        return this.leaguesService.requestToJoin(id, req.user);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Get(':id/join-requests')
+    async joinRequests(@Param('id') id: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
+        return this.leaguesService.pendingJoinRequests(id);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post(':id/join-requests/:requestId/approve')
+    async approveJoinRequest(@Param('id') id: string, @Param('requestId') requestId: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
+        return this.leaguesService.answerJoinRequest(id, requestId, true);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Post(':id/join-requests/:requestId/decline')
+    async declineJoinRequest(@Param('id') id: string, @Param('requestId') requestId: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
+        return this.leaguesService.answerJoinRequest(id, requestId, false);
+    }
+
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/leave')
     leave(@Param('id') id: string, @Request() req: any) {

@@ -13,6 +13,7 @@ import { NotificationType } from '../notifications/entities/notification.entity'
 import { League } from '../leagues/entities/league.entity';
 import { LeagueParticipant } from '../leagues/entities/league-participant.entity';
 import { CreateTournamentDto } from './dto';
+import { JoinRequestsService } from '../join-requests/join-requests.service';
 
 
 /** Quote a CSV field, and stop spreadsheets from running user text (e.g. a username "=HYPERLINK(...)") as a formula. */
@@ -43,7 +44,57 @@ export class TournamentsService {
         private leaguesRepository: Repository<League>,
         @InjectRepository(LeagueParticipant)
         private leagueParticipantsRepository: Repository<LeagueParticipant>,
+        private joinRequests: JoinRequestsService,
     ) { }
+
+    /** Anyone with the tournament's code can ask to join; the owner approves or declines. */
+    async requestToJoin(tournamentId: string, user: User) {
+        const tournament = await this.findOne(tournamentId);
+        if (tournament.created_by?.id === user.id || tournament.participants?.some((p) => p.user?.id === user.id)) {
+            throw new BadRequestException('You are already in this tournament.');
+        }
+        this.assertOpenForJoining(tournament);
+        const { request, created } = await this.joinRequests.request({ tournament: { id: tournamentId } }, user);
+        if (created && tournament.created_by) {
+            await this.notificationsService.create(
+                tournament.created_by.id,
+                NotificationType.TOURNAMENT_JOIN_REQUEST,
+                'Join request',
+                `${user.username} asked to join "${tournament.name}"`,
+                tournament.id,
+            );
+        }
+        return { id: request.id, status: request.status, tournament: { id: tournament.id, name: tournament.name } };
+    }
+
+    async pendingJoinRequests(tournamentId: string) {
+        const requests = await this.joinRequests.pending({ tournament: { id: tournamentId } });
+        return requests.map((r) => ({ id: r.id, created_at: r.created_at, user: { id: r.user.id, username: r.user.username } }));
+    }
+
+    async answerJoinRequest(tournamentId: string, requestId: string, approve: boolean) {
+        const tournament = await this.findOne(tournamentId);
+        const request = await this.joinRequests.decide(requestId, { tournament: { id: tournamentId } }, approve, async (r) => {
+            if (!approve) return;
+            this.assertOpenForJoining(tournament);
+            await this.addParticipant(tournamentId, r.user.id); // checks capacity and tells them they're in
+        });
+        if (!approve) {
+            await this.notificationsService.create(
+                request.user.id,
+                NotificationType.JOIN_DECLINED,
+                'Join request declined',
+                `Your request to join "${tournament.name}" was declined.`,
+                tournament.id,
+            );
+        }
+        return { id: request.id, status: request.status };
+    }
+
+    private assertOpenForJoining(tournament: Tournament) {
+        if (tournament.status !== TournamentStatus.UPCOMING) throw new BadRequestException('This tournament has already started.');
+        if ((tournament.participants?.length ?? 0) >= tournament.capacity) throw new BadRequestException('This tournament is full.');
+    }
 
     async assertOwner(tournamentId: string, userId: string): Promise<void> {
         const tournament = await this.tournamentsRepository.findOne({ where: { id: tournamentId }, relations: ['created_by'] });
@@ -147,13 +198,24 @@ export class TournamentsService {
         await this.tournamentsRepository.delete(id);
     }
 
+    private async ownedLeague(leagueId: string, userId: string): Promise<League> {
+        const league = await this.leaguesRepository.findOne({ where: { id: leagueId }, relations: ['created_by'] });
+        if (!league) throw new NotFoundException('That league was not found.');
+        if (league.created_by?.id !== userId) throw new ForbiddenException('You can only add tournaments to leagues you own.');
+        return league;
+    }
+
+    /** Move a tournament into one of the caller's leagues, or out of its league (leagueId null). */
+    async setLeague(tournamentId: string, leagueId: string | null | undefined, userId: string): Promise<Tournament> {
+        const league = leagueId ? await this.ownedLeague(leagueId, userId) : null;
+        const tournament = await this.findOne(tournamentId);
+        tournament.league = league;
+        await this.tournamentsRepository.save(tournament);
+        return this.findOne(tournamentId);
+    }
+
     async create({ leagueId, ...createTournamentDto }: CreateTournamentDto, user: User): Promise<Tournament> {
-        let league: League | null = null;
-        if (leagueId) {
-            league = await this.leaguesRepository.findOne({ where: { id: leagueId }, relations: ['created_by'] });
-            if (!league) throw new NotFoundException('That league was not found.');
-            if (league.created_by?.id !== user.id) throw new ForbiddenException('You can only add tournaments to leagues you own.');
-        }
+        const league = leagueId ? await this.ownedLeague(leagueId, user.id) : null;
         const tournament = this.tournamentsRepository.create({
             ...createTournamentDto,
             created_by: user,

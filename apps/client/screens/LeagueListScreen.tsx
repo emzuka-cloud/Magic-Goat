@@ -8,6 +8,7 @@ import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { startLabel } from '../utils/dates';
 import { getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Plus, Users } from 'lucide-react-native';
+import { JoinWithCode } from '../components/JoinWithCode';
 
 interface League {
     id: string;
@@ -111,13 +112,16 @@ export const LeagueListScreen = () => {
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Leagues</Text>
                     </View>
-                    <TouchableOpacity
-                        style={styles.createButton}
-                        onPress={() => navigation.navigate('CreateLeague')}
-                        accessibilityLabel="Create league"
-                    >
-                        <Plus size={24} color="white" />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <JoinWithCode kind="leagues" />
+                        <TouchableOpacity
+                            style={styles.createButton}
+                            onPress={() => navigation.navigate('CreateLeague')}
+                            accessibilityLabel="Create league"
+                        >
+                            <Plus size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {leagues.length === 0 ? (

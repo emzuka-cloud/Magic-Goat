@@ -107,9 +107,11 @@ export const NotificationsScreen = () => {
                 navigation.navigate('PlayGroupDetail', { id: notification.relatedEntityId });
                 break;
             case 'TOURNAMENT_ADD':
+            case 'TOURNAMENT_JOIN_REQUEST':
                 navigation.navigate('TournamentDetail', { id: notification.relatedEntityId });
                 break;
             case 'LEAGUE_ADD':
+            case 'LEAGUE_JOIN_REQUEST':
                 navigation.navigate('LeagueDetail', { id: notification.relatedEntityId });
                 break;
             default:

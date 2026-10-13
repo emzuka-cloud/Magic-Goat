@@ -10,7 +10,9 @@ import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from '
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { useMyLeagues } from '../hooks/useMyLeagues';
 import { modalStyles } from '../utils/modalStyles';
+import { JoinRequests } from '../components/JoinRequests';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -74,6 +76,21 @@ export const TournamentDetailScreen = () => {
     const [actionLoading, setActionLoading] = useState(false);
 
     const isOwner = tournament?.created_by.username === user?.username;
+    const myLeagues = useMyLeagues(isOwner);
+
+    const handleSetLeague = async (leagueId: string) => {
+        try {
+            const res = await fetch(`${API_URL}/tournaments/${id}/league`, {
+                method: 'PUT',
+                headers: await getAuthHeaders(),
+                body: JSON.stringify({ leagueId: leagueId || null }),
+            });
+            if (res.ok) fetchData();
+            else await showApiError(res, 'Could not change the league.');
+        } catch {
+            showError(NETWORK_ERROR);
+        }
+    };
 
     const fetchData = useCallback(async () => {
         try {
@@ -474,11 +491,27 @@ export const TournamentDetailScreen = () => {
                         </View>
                     </View>
 
+                    {isOwner && tournament?.status === 'upcoming' && <JoinRequests kind="tournaments" id={id} onApproved={fetchData} />}
+
                     {tournament?.status === 'upcoming' ? renderLobby() : renderBracket()}
 
                     {/* Global Admin Actions */}
                     {isOwner && (
                         <View style={[styles.adminActions, { marginTop: 40, borderTopWidth: 1, borderTopColor: '#2e1065', paddingTop: 20 }]}>
+                            {(myLeagues.length > 0 || tournament?.league) && (
+                                <View>
+                                    <Text style={styles.sectionTitle}>League</Text>
+                                    <Dropdown
+                                        placeholder="Not part of a league"
+                                        options={[
+                                            { label: 'Not part of a league', value: '' },
+                                            ...myLeagues.map(l => ({ label: l.name, value: l.id, hint: 'Results count toward its standings' })),
+                                        ]}
+                                        value={tournament?.league?.id ?? ''}
+                                        onChange={handleSetLeague}
+                                    />
+                                </View>
+                            )}
                             <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteTournament}>
                                 <Trash2 size={20} color="#ef4444" />
                                 <Text style={styles.deleteButtonText}>Delete Tournament</Text>

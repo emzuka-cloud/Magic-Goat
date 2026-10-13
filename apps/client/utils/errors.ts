@@ -24,9 +24,13 @@ export async function apiErrorMessage(res: Response, fallback: string): Promise<
 }
 
 // Alert.alert is a no-op on react-native-web, so fall back to window.alert there.
-export function showError(message: string, title = 'Error') {
+export function showMessage(title: string, message: string) {
     if (Platform.OS === 'web') window.alert(message);
     else Alert.alert(title, message);
+}
+
+export function showError(message: string, title = 'Error') {
+    showMessage(title, message);
 }
 
 export async function showApiError(res: Response, fallback: string) {
