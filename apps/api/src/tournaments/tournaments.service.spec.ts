@@ -1,4 +1,4 @@
-import { TournamentsService } from './tournaments.service';
+import { TournamentsService, csvCell } from './tournaments.service';
 import { Pairing, PairingResult } from './entities/pairing.entity';
 import { TournamentFormat, TournamentStatus } from './entities/tournament.entity';
 
@@ -49,5 +49,16 @@ describe('TournamentsService.assertCanView', () => {
 
   it('rejects anyone else with 403', async () => {
     await expect(svc.assertCanView('t', 'stranger')).rejects.toThrow('You are not part of this tournament.');
+  });
+});
+
+describe('csvCell', () => {
+  it('quotes fields and neutralises spreadsheet formulas', () => {
+    expect(csvCell(1)).toBe('"1"');
+    expect(csvCell('alice')).toBe('"alice"');
+    expect(csvCell('a,"b"\nc')).toBe('"a,""b""\nc"');
+    for (const evil of ['=HYPERLINK("http://x")', '+1', '-1+1', '@SUM(A1)', '\tcmd']) {
+      expect(csvCell(evil).startsWith(`"'`)).toBe(true);
+    }
   });
 });

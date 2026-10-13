@@ -12,6 +12,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 
 
+/** Quote a CSV field, and stop spreadsheets from running user text (e.g. a username "=HYPERLINK(...)") as a formula. */
+export function csvCell(value: unknown): string {
+    let s = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+}
+
 @Injectable()
 export class TournamentsService {
     constructor(
@@ -616,22 +623,24 @@ export class TournamentsService {
             })),
         };
 
+        // Goes into a Content-Disposition header: keep it to safe ASCII so a name can't break or inject headers.
+        const baseName = tournament.name.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80) || 'tournament';
         if (format === 'json') {
             return {
                 data: JSON.stringify(exportData, null, 2),
                 contentType: 'application/json',
-                filename: `${tournament.name.replace(/\s+/g, '_')}_export.json`,
+                filename: `${baseName}_export.json`,
             };
         } else {
             // CSV format: one row per pairing
             const csvLines = ['Round,Player 1,Player 2,Result'];
             for (const pairing of exportData.pairings) {
-                csvLines.push(`${pairing.round},${pairing.player1},${pairing.player2},${pairing.result}`);
+                csvLines.push([pairing.round, pairing.player1, pairing.player2, pairing.result].map(csvCell).join(','));
             }
             return {
                 data: csvLines.join('\n'),
                 contentType: 'text/csv',
-                filename: `${tournament.name.replace(/\s+/g, '_')}_export.csv`,
+                filename: `${baseName}_export.csv`,
             };
         }
     }
