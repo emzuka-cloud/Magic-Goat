@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tournament, TournamentFormat, TournamentStatus } from './entities/tournament.entity';
 import { TournamentParticipant } from './entities/participant.entity';
-import { Pairing, PairingResult } from './entities/pairing.entity';
+import { Pairing, PairingResult, resultSeats, seatsResult } from './entities/pairing.entity';
 import { Invitation, InvitationStatus } from './entities/invitation.entity';
 import { User } from '../users/entities/user.entity';
 import { EventsGateway } from '../events/events.gateway';
@@ -312,7 +312,7 @@ export class TournamentsService {
     async getPairings(tournamentId: string): Promise<Pairing[]> {
         return this.pairingsRepository.find({
             where: { tournament: { id: tournamentId } },
-            relations: ['player1', 'player2'],
+            relations: ['player1', 'player2', 'player3', 'player4'], // seats 3-4: Commander pods
             order: { round: 'DESC' },
         });
     }
@@ -322,8 +322,60 @@ export class TournamentsService {
      * feeder match with nobody in it) and move every decided winner into the next round.
      */
     // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    /**
+     * Commander: pods of up to 4. Every pod except the final sends 2 players on (even pods fill seats 1-2
+     * of the next pod, odd pods seats 3-4); the final crowns 1. A pod that can never hold more players than
+     * it sends on is decided automatically (a short pod's players just move on).
+     */
+    // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    private async resolveCommanderPods(tournamentId: string): Promise<void> {
+        const pairings = await this.pairingsRepository.find({
+            where: { tournament: { id: tournamentId } },
+            relations: ['player1', 'player2', 'player3', 'player4'],
+            order: { round: 'ASC', order: 'ASC' },
+        });
+        if (!pairings.length) return;
+        const lastRound = Math.max(...pairings.map(p => p.round));
+        const at = (round: number, order: number) => pairings.find(p => p.round === round && p.order === order);
+        const seats = (p: Pairing) => [p.player1, p.player2, p.player3, p.player4];
+        const sends = (p: Pairing) => (p.round === lastRound ? 1 : 2);
+        const decided = (p: Pairing) => p.result !== PairingResult.PENDING;
+        const pendingFeeders = (p: Pairing) => p.round === 1 ? [] :
+            [at(p.round - 1, p.order * 2), at(p.round - 1, p.order * 2 + 1)].filter((f): f is Pairing => !!f && !decided(f));
+        // Most players a pod can still send on / still receive.
+        const maxOut = (p: Pairing): number => decided(p) ? resultSeats(p.result).length : Math.min(sends(p), maxIn(p));
+        const maxIn = (p: Pairing): number => seats(p).filter(Boolean).length + pendingFeeders(p).reduce((n, f) => n + maxOut(f), 0);
+
+        const changed = new Set<Pairing>();
+        for (const p of pairings) {
+            if (!decided(p)) {
+                const filled = seats(p).map((u, i) => (u ? i + 1 : 0)).filter(Boolean);
+                const nobodyElseComing = pendingFeeders(p).every(f => maxOut(f) === 0);
+                if (filled.length && filled.length <= sends(p) && nobodyElseComing) {
+                    p.result = seatsResult(filled);
+                    changed.add(p);
+                }
+            }
+            const next = at(p.round + 1, Math.floor(p.order / 2));
+            if (!next || !decided(p)) continue;
+            const winners = resultSeats(p.result).map(i => seats(p)[i - 1]).filter(Boolean);
+            const slots = p.order % 2 === 0 ? (['player1', 'player2'] as const) : (['player3', 'player4'] as const);
+            slots.forEach((slot, k) => {
+                const want = winners[k] ?? null;
+                if ((next[slot]?.id ?? null) !== (want?.id ?? null)) {
+                    next[slot] = want as User;
+                    changed.add(next);
+                }
+            });
+        }
+        if (changed.size) await this.pairingsRepository.save([...changed]);
+
+        const final = at(lastRound, 0);
+        await this.tournamentsRepository.update(tournamentId, { status: final && decided(final) ? TournamentStatus.COMPLETED : TournamentStatus.ACTIVE });
+    }
+
     private async resolveByes(tournamentId: string, format: TournamentFormat): Promise<void> {
-        if (format === TournamentFormat.COMMANDER) return; // ponytail: 4-player pods advance 2 players; not handled here
+        if (format === TournamentFormat.COMMANDER) return this.resolveCommanderPods(tournamentId);
         const pairings = await this.pairingsRepository.find({
             where: { tournament: { id: tournamentId } },
             relations: ['player1', 'player2'],
@@ -566,7 +618,16 @@ export class TournamentsService {
             throw new NotFoundException('This match was not found in this tournament.');
         }
 
-        if (pairing.tournament.format !== TournamentFormat.COMMANDER) {
+        if (pairing.tournament.format === TournamentFormat.COMMANDER) {
+            // The final crowns one player; every other pod sends two on.
+            const isFinal = !pairing.next_pairing;
+            const chosen = [...new Set(resultSeats(result))];
+            const podSeats = [pairing.player1, pairing.player2, pairing.player3, pairing.player4];
+            if (chosen.length !== (isFinal ? 1 : 2) || chosen.some(seat => !podSeats[seat - 1])) {
+                throw new BadRequestException(isFinal ? 'Pick the one winner of the final.' : 'Pick the two players who move on from this pod.');
+            }
+            result = seatsResult(chosen);
+        } else {
             if (result !== PairingResult.P1_WIN && result !== PairingResult.P2_WIN) {
                 throw new BadRequestException('A match result must be a win for player 1 or player 2.');
             }
@@ -580,28 +641,8 @@ export class TournamentsService {
 
         // Advance Winner
         if (pairing.next_pairing) {
-            const isCommander = pairing.tournament.format === TournamentFormat.COMMANDER;
-
-            if (isCommander) {
-                const winners: User[] = [];
-                if (result.includes('p1') && pairing.player1) winners.push(pairing.player1);
-                if (result.includes('p2') && pairing.player2) winners.push(pairing.player2);
-                if (result.includes('p3') && pairing.player3) winners.push(pairing.player3);
-                if (result.includes('p4') && pairing.player4) winners.push(pairing.player4);
-
-                if (winners.length === 2) {
-                    const isEvenOrder = pairing.order % 2 === 0;
-                    if (isEvenOrder) {
-                        pairing.next_pairing.player1 = winners[0];
-                        pairing.next_pairing.player2 = winners[1];
-                    } else {
-                        pairing.next_pairing.player3 = winners[0];
-                        pairing.next_pairing.player4 = winners[1];
-                    }
-                    await this.pairingsRepository.save(pairing.next_pairing);
-                    this.eventsGateway.server.to(`tournament_${pairing.tournament.id}`).emit('pairing_updated', pairing.next_pairing);
-                }
-            } else if (result === 'p1_win' || result === 'p2_win') {
+            // Commander pods move on in resolveCommanderPods (called below).
+            if (pairing.tournament.format !== TournamentFormat.COMMANDER && (result === 'p1_win' || result === 'p2_win')) {
                 const winner = result === 'p1_win' ? pairing.player1 : pairing.player2;
                 const isPlayer1Slot = pairing.order % 2 === 0;
 

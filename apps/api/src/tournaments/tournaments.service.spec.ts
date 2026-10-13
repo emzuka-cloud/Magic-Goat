@@ -71,3 +71,42 @@ describe('csvCell', () => {
     }
   });
 });
+
+const pod = (round: number, order: number, players: any[] = [], result = PairingResult.PENDING) =>
+  ({ round, order, player1: players[0] ?? null, player2: players[1] ?? null, player3: players[2] ?? null, player4: players[3] ?? null, result }) as Pairing;
+
+function resolveCommander(pairings: Pairing[]) {
+  const repo = { find: jest.fn(async () => pairings), save: jest.fn(async (x) => x) };
+  const svc = new TournamentsService(tournaments as any, {} as any, repo as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  return (svc as any).resolveByes('t', TournamentFormat.COMMANDER);
+}
+
+describe('Commander pods', () => {
+  it('auto-advances a short pod, sends two on, and crowns one champion (6 players, 8 seats)', async () => {
+    const [a, b, c, d, e, f] = ['a', 'b', 'c', 'd', 'e', 'f'].map(u);
+    const p = [pod(1, 0, [a, b, c, d]), pod(1, 1, [e, f]), pod(2, 0)];
+    await resolveCommander(p);
+    expect(p[1].result).toBe(PairingResult.P1_P2);          // only 2 players: both move on
+    expect([p[2].player3, p[2].player4]).toEqual([e, f]);   // odd pod fills seats 3-4 of the final
+    expect(p[0].result).toBe(PairingResult.PENDING);        // full pod still has to play
+    expect(tournaments.update).toHaveBeenLastCalledWith('t', { status: TournamentStatus.ACTIVE });
+
+    p[0].result = PairingResult.P1_P3;                      // a and c win their pod
+    await resolveCommander(p);
+    expect([p[2].player1, p[2].player2]).toEqual([a, c]);
+    expect(p[2].result).toBe(PairingResult.PENDING);        // 4-player final is played, not auto-decided
+
+    p[2].result = PairingResult.P4_WIN;                     // f wins the final
+    await resolveCommander(p);
+    expect(tournaments.update).toHaveBeenLastCalledWith('t', { status: TournamentStatus.COMPLETED });
+  });
+
+  it('waits for a pod that can still send players before deciding the next one (5 players)', async () => {
+    const [a, b, c, d, e] = ['a', 'b', 'c', 'd', 'e'].map(u);
+    const p = [pod(1, 0, [a, b, c, d]), pod(1, 1, [e]), pod(2, 0)];
+    await resolveCommander(p);
+    expect(p[1].result).toBe(PairingResult.P1_WIN);         // lone player moves on
+    expect(p[2].player3).toBe(e);
+    expect(p[2].result).toBe(PairingResult.PENDING);        // final must wait for pod 1's two players
+  });
+});
