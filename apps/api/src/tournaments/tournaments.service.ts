@@ -10,6 +10,9 @@ import { EventsGateway } from '../events/events.gateway';
 import { PlayGroup } from '../playgroups/playgroups.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+import { League } from '../leagues/entities/league.entity';
+import { LeagueParticipant } from '../leagues/entities/league-participant.entity';
+import { CreateTournamentDto } from './dto';
 
 
 /** Quote a CSV field, and stop spreadsheets from running user text (e.g. a username "=HYPERLINK(...)") as a formula. */
@@ -36,6 +39,10 @@ export class TournamentsService {
         private usersRepository: Repository<User>,
         private eventsGateway: EventsGateway,
         private notificationsService: NotificationsService,
+        @InjectRepository(League)
+        private leaguesRepository: Repository<League>,
+        @InjectRepository(LeagueParticipant)
+        private leagueParticipantsRepository: Repository<LeagueParticipant>,
     ) { }
 
     async assertOwner(tournamentId: string, userId: string): Promise<void> {
@@ -48,10 +55,12 @@ export class TournamentsService {
     async assertCanView(tournamentId: string, userId: string): Promise<Tournament> {
         const tournament = await this.findOne(tournamentId);
         const isMember = tournament.participants?.some((p) => p.user?.id === userId);
-        if (tournament.created_by?.id !== userId && !isMember) {
-            throw new ForbiddenException('You are not part of this tournament.');
-        }
-        return tournament;
+        if (tournament.created_by?.id === userId || isMember) return tournament;
+        // A league's members can follow every tournament that counts for that league.
+        if (tournament.league && (tournament.league.created_by?.id === userId || await this.leagueParticipantsRepository.exists({
+            where: { league: { id: tournament.league.id }, user: { id: userId } },
+        }))) return tournament;
+        throw new ForbiddenException('You are not part of this tournament.');
     }
 
     async addParticipant(tournamentId: string, identifier: string): Promise<TournamentParticipant> {
@@ -138,10 +147,17 @@ export class TournamentsService {
         await this.tournamentsRepository.delete(id);
     }
 
-    async create(createTournamentDto: { name: string; format: TournamentFormat; capacity?: number }, user: User): Promise<Tournament> {
+    async create({ leagueId, ...createTournamentDto }: CreateTournamentDto, user: User): Promise<Tournament> {
+        let league: League | null = null;
+        if (leagueId) {
+            league = await this.leaguesRepository.findOne({ where: { id: leagueId }, relations: ['created_by'] });
+            if (!league) throw new NotFoundException('That league was not found.');
+            if (league.created_by?.id !== user.id) throw new ForbiddenException('You can only add tournaments to leagues you own.');
+        }
         const tournament = this.tournamentsRepository.create({
             ...createTournamentDto,
             created_by: user,
+            league,
             // If capacity is passed, use it, otherwise format might need mapping or default
             capacity: createTournamentDto.capacity || 8
         });
@@ -161,7 +177,7 @@ export class TournamentsService {
     }
 
     async findOne(id: string): Promise<Tournament> {
-        const tournament = await this.tournamentsRepository.findOne({ where: { id }, relations: ['created_by', 'participants', 'participants.user'] });
+        const tournament = await this.tournamentsRepository.findOne({ where: { id }, relations: ['created_by', 'participants', 'participants.user', 'league', 'league.created_by'] });
         if (!tournament) {
             throw new NotFoundException(`Tournament with ID ${id} not found`);
         }

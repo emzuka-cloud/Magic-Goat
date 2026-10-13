@@ -12,7 +12,8 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 ## Features / logic
 
 - [ ] **Commander tournaments** (4-player pods): no automatic completion/champion and no bye resolution (`resolveByes` skips them).
-- [ ] **League standings source of truth**: standings are recalculated from tournament results every time the league is opened (DB writes on a GET), overwriting manual edits for players who have results. Decide manual vs computed; if computed, recalculate when a result is reported instead.
+- [ ] League standings recalculate on every GET (members only). Fine at this size; recalculate on result/delete instead if leagues grow large.
+- [ ] Existing tournaments can't be moved into a league after creation (only at creation). Add if needed.
 - [ ] **`seed.ts` is broken**: its entity list is missing `Notification` (and `PlayGroup`, `LeagueParticipant`), so it crashes on start.
 - [ ] **Offline sync hook** (`useOfflineSync`) is not mounted anywhere and nothing calls `storage.queueMutation`.
 - [ ] Add a user search endpoint so the player dropdowns can find people outside your play groups.

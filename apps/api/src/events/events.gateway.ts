@@ -45,11 +45,13 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         @ConnectedSocket() client: Socket,
     ) {
         const userId = client.data.userId;
-        // Same rule as GET /tournaments/:id: owner or participant.
+        // Same rule as GET /tournaments/:id: owner, participant, or member of its league.
         const canView = !!userId && typeof tournamentId === 'string' && await this.tournamentsRepository.exists({
             where: [
                 { id: tournamentId, created_by: { id: userId } },
                 { id: tournamentId, participants: { user: { id: userId } } },
+                { id: tournamentId, league: { created_by: { id: userId } } },
+                { id: tournamentId, league: { participants: { user: { id: userId } } } },
             ],
         }).catch(() => false); // malformed UUID
         if (!canView) return { event: 'error', data: 'You are not part of this tournament.' };

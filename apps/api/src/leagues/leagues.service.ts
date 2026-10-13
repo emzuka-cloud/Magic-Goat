@@ -3,12 +3,32 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateLeagueDto, UpdateLeagueDto, UpdateStandingDto } from './dto';
 import { League } from './entities/league.entity';
-import { LeagueParticipant } from './entities/league-participant.entity';
+import { ADJUSTABLE_STATS, AdjustableStat, LeagueParticipant } from './entities/league-participant.entity';
 import { Tournament } from '../tournaments/entities/tournament.entity';
 import { Pairing } from '../tournaments/entities/pairing.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+
+type Results = Record<AdjustableStat, number>;
+const EMPTY_RESULTS: Results = { points: 0, matches_played: 0, matches_won: 0, matches_drawn: 0, matches_lost: 0 };
+
+/** Stored total = what results give + the owner's adjustment. */
+export function applyResults(p: LeagueParticipant, results: Results, omw: number) {
+    for (const stat of ADJUSTABLE_STATS) p[stat] = results[stat] + (p[`adj_${stat}`] ?? 0);
+    p.omw_percentage = omw;
+}
+
+/** Owner typed new totals: keep them by storing their difference from the results. Expects current totals. */
+export function setTotals(p: LeagueParticipant, totals: Partial<Results>) {
+    for (const stat of ADJUSTABLE_STATS) {
+        const wanted = totals[stat];
+        if (wanted === undefined) continue;
+        const fromResults = p[stat] - (p[`adj_${stat}`] ?? 0);
+        p[`adj_${stat}`] = wanted - fromResults;
+        p[stat] = wanted;
+    }
+}
 
 @Injectable()
 export class LeaguesService {
@@ -175,30 +195,33 @@ export class LeaguesService {
         }
     }
 
+    /**
+     * The owner sets the totals they want to show; we store the difference from the results as an
+     * adjustment, so later results still count and the correction is kept.
+     */
     async updateStanding(leagueId: string, userId: string, updates: UpdateStandingDto): Promise<LeagueParticipant> {
-        let participant = await this.leagueParticipantsRepository.findOne({
-            where: { league: { id: leagueId }, user: { id: userId } },
-            relations: ['user', 'league']
-        });
-
-        if (!participant) {
-            const league = await this.findOne(leagueId);
-            const usersRepository = this.leagueParticipantsRepository.manager.getRepository(User);
-            const user = await usersRepository.findOne({ where: { id: userId } });
-            if (!user) throw new NotFoundException('User not found');
-
-            participant = this.leagueParticipantsRepository.create({ league, user });
-        }
-
-        // Update fields
-        if (updates.points !== undefined) participant.points = updates.points;
-        if (updates.matches_played !== undefined) participant.matches_played = updates.matches_played;
-        if (updates.matches_won !== undefined) participant.matches_won = updates.matches_won;
-        if (updates.matches_drawn !== undefined) participant.matches_drawn = updates.matches_drawn;
-        if (updates.matches_lost !== undefined) participant.matches_lost = updates.matches_lost;
-        if (updates.omw_percentage !== undefined) participant.omw_percentage = updates.omw_percentage;
-
+        await this.updateStandings(leagueId); // stored totals must be current before we diff against them
+        const participant = await this.findParticipant(leagueId, userId);
+        setTotals(participant, updates);
         return this.leagueParticipantsRepository.save(participant);
+    }
+
+    /** Drop the owner's corrections for this player; standings go back to what results give. */
+    async clearAdjustments(leagueId: string, userId: string): Promise<LeagueParticipant> {
+        const participant = await this.findParticipant(leagueId, userId);
+        for (const stat of ADJUSTABLE_STATS) participant[`adj_${stat}`] = 0;
+        await this.leagueParticipantsRepository.save(participant);
+        await this.updateStandings(leagueId);
+        return this.findParticipant(leagueId, userId);
+    }
+
+    private async findParticipant(leagueId: string, userId: string): Promise<LeagueParticipant> {
+        const participant = await this.leagueParticipantsRepository.findOne({
+            where: { league: { id: leagueId }, user: { id: userId } },
+            relations: ['user'],
+        });
+        if (!participant) throw new NotFoundException('This player is not in the league.');
+        return participant;
     }
 
     async getStandings(leagueId: string): Promise<LeagueParticipant[]> {
@@ -268,8 +291,9 @@ export class LeaguesService {
                         if (stats1) { stats1.points += 1; stats1.matches_drawn++; }
                         if (stats2) { stats2.points += 1; stats2.matches_drawn++; }
                     }
-                } else if (p1 && !p2 && pairing.result === 'p1_win') {
-                    // Bye
+                } else if (p1 && !p2 && pairing.result === 'p1_win' && pairing.round === 1) {
+                    // A first-round bye counts as a win (MTG convention). Later rounds with an empty slot are
+                    // walkovers through empty bracket branches, not matches, so they don't score.
                     const stats1 = userStats.get(p1.id);
                     if (stats1) { stats1.points += 3; stats1.matches_won++; stats1.matches_played++; }
                 }
@@ -284,41 +308,28 @@ export class LeaguesService {
             stats.mw_percentage = mw;
         }
 
-        // Calculate OMW% and save
+        // Every row is rewritten (members without results go back to 0 + their adjustment), and
+        // anyone who played a league tournament without being a member gets a row.
+        const participants = await this.leagueParticipantsRepository.find({
+            where: { league: { id: leagueId } },
+            relations: ['user'],
+        });
+        const byUser = new Map(participants.map((p) => [p.user.id, p]));
         for (const [userId, stats] of userStats) {
-            let omwSum = 0;
-            let opponentCount = 0;
-
-            stats.opponents.forEach(oppId => {
-                const oppStats = userStats.get(oppId);
-                if (oppStats && oppStats.mw_percentage) {
-                    omwSum += oppStats.mw_percentage;
-                    opponentCount++;
-                }
-            });
-
-            const omw_percentage = opponentCount > 0 ? omwSum / opponentCount : 0.33;
-
-            let participant = await this.leagueParticipantsRepository.findOne({
-                where: { league: { id: leagueId }, user: { id: userId } },
-            });
-
-            if (!participant) {
-                participant = this.leagueParticipantsRepository.create({
-                    league,
-                    user: stats.user,
-                });
-            }
-
-            participant.points = stats.points;
-            participant.matches_played = stats.matches_played;
-            participant.matches_won = stats.matches_won;
-            participant.matches_drawn = stats.matches_drawn;
-            participant.matches_lost = stats.matches_lost;
-            participant.omw_percentage = omw_percentage;
-
-            await this.leagueParticipantsRepository.save(participant);
+            if (!byUser.has(userId)) byUser.set(userId, this.leagueParticipantsRepository.create({ league, user: stats.user }));
         }
+
+        for (const [userId, participant] of byUser) {
+            const stats = userStats.get(userId);
+            let omw_percentage = 0;
+            if (stats) {
+                const opponentMw = [...stats.opponents].map((id) => userStats.get(id)?.mw_percentage).filter((mw): mw is number => !!mw);
+                omw_percentage = opponentMw.length ? opponentMw.reduce((a, b) => a + b, 0) / opponentMw.length : 0.33;
+            }
+            applyResults(participant, stats ?? EMPTY_RESULTS, omw_percentage);
+        }
+
+        await this.leagueParticipantsRepository.save([...byUser.values()]);
     }
 
     private initUserStats(map: Map<string, any>, user: User) {
