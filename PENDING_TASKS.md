@@ -5,30 +5,19 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 ## UI / UX
 
-- [ ] **Consistent screens**: some screens show two stacked headers (the navigator's plus the screen's own); the "+" button is bottom-right on Leagues but top-right elsewhere; dialogs use three different styles. Pick one header, one FAB position, one modal style.
-- [ ] **Home tiles** grow very large on wide browser windows; cap tile size / max content width (`utils/layouts.ts`).
-- [ ] **Self-notifications**: users get notified about actions they did themselves (e.g. adding their own play group to a tournament). Skip the actor when creating notifications.
-- [ ] **Life counter reset** has no confirmation; one stray tap wipes the game.
-- [ ] **Silent successes on web**: "Member added" etc. use `Alert.alert`, which does nothing on web. Use a toast or rely on the list updating.
-- [ ] **League standings table**: "W-D-L" and "Actions" column headers run together.
-- [ ] **Starts/Started date** wording and format could be unified across league list and detail.
+- [ ] Detail screens still inline their own web/native confirm branches; switch them to `confirmAction` (`utils/errors.ts`) when touching them.
+- [ ] `InvitationsScreen` is registered but nothing navigates to it (and it has no back button now that the stack header is off). Link it from Notifications or remove it.
+- [ ] Visual check on a real phone (native) of the header/modal changes and the home carousel (swipe, fling, snap feel); web was verified.
 
 ## Features / logic
 
-- [ ] **Commander tournaments** (4-player pods): no automatic completion/champion and no bye resolution (`resolveByes` skips them).
-- [ ] **League standings source of truth**: standings are recalculated from tournament results every time the league is opened, overwriting manual edits for players who have results. Decide manual vs computed.
-- [ ] **Invitations** are emitted to `user_<id>` socket rooms that nothing joins; join on authenticated socket connect.
-- [ ] **`seed.ts` is broken**: its entity list is missing `Notification` (and `PlayGroup`, `LeagueParticipant`), so it crashes on start.
-- [ ] **Offline sync hook** (`useOfflineSync`) is not mounted anywhere and nothing calls `storage.queueMutation`.
-- [ ] Add a user search endpoint so the player dropdowns can find people outside your play groups.
+- [ ] League standings recalculate on every GET (members only). Fine at this size; recalculate on result/delete instead if leagues grow large.
 
 ## Engineering
 
-- [ ] Global `ValidationPipe({ whitelist: true })` + DTO classes (`class-validator`) instead of `any` bodies.
+- [ ] Open a PR from `security-fixes` into `main` (branch is pushed).
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
-- [ ] `npm audit`: API 74 / client 73 known vulnerabilities (as of 2026-10-12); upgrade Nest/Expo and re-test. Expo also warns `expo` 54.0.27 → ~54.0.37, `expo-font` → ~14.0.12.
-- [ ] Remove unused deps now that local auth is gone: `passport-local`, `@nestjs/jwt`, `@types/passport-local`.
-- [ ] Move `API_URL` and Cognito IDs into env (`EXPO_PUBLIC_*` / API `.env`) and add `.env.example`.
-- [ ] CI (GitHub Actions): lint, test, `npm audit --audit-level=high` per app.
-- [ ] Root README with setup steps (see `CONTEXT.md` for the current ones).
+- [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
+- [ ] Lint (API): ~2.6k ESLint findings, ~2.3k auto-fixable formatting. Run `npx eslint --fix` in a commit of its own, fix the rest, then add lint to CI.
+- [ ] After the Expo upgrade, raise the client CI audit gate from `critical` to `high`.
 - [ ] e2e tests for ownership checks (403) on every mutating endpoint.

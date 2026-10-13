@@ -14,11 +14,12 @@ export class League {
     @Column({ type: 'text', nullable: true })
     description: string;
 
+    // TypeORM returns `date` columns as 'YYYY-MM-DD' strings.
     @Column({ type: 'date' })
-    start_date: Date;
+    start_date: string;
 
     @Column({ type: 'date', nullable: true })
-    end_date: Date;
+    end_date: string;
 
     @ManyToOne(() => User)
     @Index()

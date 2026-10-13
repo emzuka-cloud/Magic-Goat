@@ -4,12 +4,18 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
-import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
+import { showApiError, showError, showMessage, NETWORK_ERROR } from '../utils/errors';
+import { storage } from '../utils/storage';
+import { syncPendingMutations } from '../hooks/useOfflineSync';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from 'lucide-react-native';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { useMyLeagues } from '../hooks/useMyLeagues';
+import { modalStyles } from '../utils/modalStyles';
+import { JoinRequests } from '../components/JoinRequests';
+import { PlayerSearch } from '../components/PlayerSearch';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -44,6 +50,7 @@ interface Tournament {
     capacity: number;
     created_by: User;
     participants: Participant[];
+    league?: { id: string; name: string } | null;
 }
 
 export const TournamentDetailScreen = () => {
@@ -55,6 +62,7 @@ export const TournamentDetailScreen = () => {
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [pairings, setPairings] = useState<Pairing[]>([]);
     const [loading, setLoading] = useState(true);
+    const [offline, setOffline] = useState(false); // showing a cached copy / results queued on this device
     const [refreshing, setRefreshing] = useState(false);
 
     // Modals
@@ -72,9 +80,25 @@ export const TournamentDetailScreen = () => {
     const [actionLoading, setActionLoading] = useState(false);
 
     const isOwner = tournament?.created_by.username === user?.username;
+    const myLeagues = useMyLeagues(isOwner);
+
+    const handleSetLeague = async (leagueId: string) => {
+        try {
+            const res = await fetch(`${API_URL}/tournaments/${id}/league`, {
+                method: 'PUT',
+                headers: await getAuthHeaders(),
+                body: JSON.stringify({ leagueId: leagueId || null }),
+            });
+            if (res.ok) fetchData();
+            else await showApiError(res, 'Could not change the league.');
+        } catch {
+            showError(NETWORK_ERROR);
+        }
+    };
 
     const fetchData = useCallback(async () => {
         try {
+            await syncPendingMutations(); // results saved offline go first, so the reload includes them
             const headers = await getAuthHeaders();
             const [tRes, pRes] = await Promise.all([
                 fetch(`${API_URL}/tournaments/${id}`, { headers }),
@@ -84,15 +108,25 @@ export const TournamentDetailScreen = () => {
             if (tRes.ok) {
                 const tData = await tRes.json();
                 setTournament(tData);
+                if (pRes.ok) {
+                    const pData = await pRes.json();
+                    setPairings(pData);
+                    storage.saveTournament(id, { tournament: tData, pairings: pData }); // for offline viewing
+                }
+                setOffline(false);
             } else {
                 await showApiError(tRes, 'Could not load this tournament.');
             }
-            if (pRes.ok) {
-                const pData = await pRes.json();
-                setPairings(pData);
-            }
         } catch (error) {
-            showError(NETWORK_ERROR);
+            // No connection: show the last copy loaded on this device, if any.
+            const cached = await storage.getTournament(id);
+            if (cached) {
+                setTournament(cached.tournament);
+                setPairings(cached.pairings);
+                setOffline(true);
+            } else {
+                showError(NETWORK_ERROR);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -122,7 +156,6 @@ export const TournamentDetailScreen = () => {
             });
 
             if (res.ok) {
-                Alert.alert('Success', 'User added');
                 setAddUserModalVisible(false);
                 setIdentifier('');
                 fetchData();
@@ -148,7 +181,6 @@ export const TournamentDetailScreen = () => {
             });
 
             if (res.ok) {
-                Alert.alert('Success', 'Group members added');
                 setAddGroupModalVisible(false);
                 setGroupId('');
                 fetchData();
@@ -281,12 +313,27 @@ export const TournamentDetailScreen = () => {
                 await showApiError(res, 'Could not save the match result.');
             }
         } catch (e) {
-            showError(NETWORK_ERROR);
+            // Offline at the venue: keep the result on this device and send it when the connection is back.
+            await storage.queueMutation({ type: 'report_result', payload: { tournamentId: id, pairingId, result } });
+            const updated = pairings.map(p => (p.id === pairingId ? { ...p, result } : p));
+            setPairings(updated);
+            storage.saveTournament(id, { tournament, pairings: updated });
+            setResultModalVisible(false);
+            setSelectedMatch(null);
+            setSelectedWinners([]);
+            setOffline(true);
+            showMessage('Saved offline', 'No connection. The result is saved on this device and will be sent automatically when you are back online.');
         }
     };
 
+    // Commander: the last round is the final (one winner); every other pod sends two players on.
+    const lastRound = Math.max(0, ...pairings.map(p => p.round));
+    const winnersNeeded = (p: Pairing | null) => (p && p.round === lastRound ? 1 : 2);
+    const podPlayers = (p: Pairing) => [p.player1, p.player2, p.player3, p.player4].filter(Boolean).length;
+
     const openCommanderResultModal = (pairing: Pairing) => {
-        if (!isOwner) return;
+        // Pods with no more players than move on are decided automatically.
+        if (!isOwner || podPlayers(pairing) <= winnersNeeded(pairing)) return;
         setSelectedMatch(pairing);
         setSelectedWinners([]);
         setResultModalVisible(true);
@@ -296,18 +343,17 @@ export const TournamentDetailScreen = () => {
         if (selectedWinners.includes(pKey)) {
             setSelectedWinners(prev => prev.filter(k => k !== pKey));
         } else {
-            if (selectedWinners.length < 2) {
+            if (selectedWinners.length < winnersNeeded(selectedMatch)) {
                 setSelectedWinners(prev => [...prev, pKey]);
             }
         }
     };
 
     const submitCommanderResult = () => {
-        if (!selectedMatch || selectedWinners.length !== 2) return;
-        // Construct result string e.g. "p1_p2"
-        // Backend expects string containing keys
-        const resultStr = selectedWinners.join('_');
-        handleUpdateResult(selectedMatch.id, resultStr);
+        if (!selectedMatch || selectedWinners.length !== winnersNeeded(selectedMatch)) return;
+        // Seats in order: "p1_p3" for two players moving on, "p3_win" for the final's winner.
+        const seats = [...selectedWinners].sort();
+        handleUpdateResult(selectedMatch.id, seats.length === 1 ? `${seats[0]}_win` : seats.join('_'));
     };
 
     const renderLobby = () => (
@@ -316,10 +362,10 @@ export const TournamentDetailScreen = () => {
                 <Text style={styles.sectionTitle}>Participants ({tournament?.participants.length}/{tournament?.capacity})</Text>
                 {isOwner && (
                     <View style={styles.headerButtons}>
-                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddUserModalVisible(true)}>
+                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddUserModalVisible(true)} accessibilityLabel="Add participant">
                             <UserPlus size={20} color="#a855f7" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddGroupModalVisible(true)}>
+                        <TouchableOpacity style={styles.iconButton} onPress={() => setAddGroupModalVisible(true)} accessibilityLabel="Add play group">
                             <Users size={20} color="#a855f7" />
                         </TouchableOpacity>
                     </View>
@@ -360,8 +406,9 @@ export const TournamentDetailScreen = () => {
         rounds.forEach(list => list.sort((a, b) => a.order - b.order));
         const isCommander = tournament?.format === 'commander';
         const final = rounds.get(sortedRounds[sortedRounds.length - 1])?.[0];
-        const champion = !isCommander && tournament?.status === 'completed' && final
-            ? (final.result === 'p1_win' ? final.player1 : final.result === 'p2_win' ? final.player2 : null)
+        const finalSeat = Number(final?.result.match(/^p([1-4])_win$/)?.[1] ?? 0);
+        const champion = tournament?.status === 'completed' && final && finalSeat
+            ? [final.player1, final.player2, final.player3, final.player4][finalSeat - 1]
             : null;
 
         return (
@@ -394,7 +441,7 @@ export const TournamentDetailScreen = () => {
                                                     style={[styles.playerObj, isSelected && styles.winner]}
                                                     onPress={() => openCommanderResultModal(p)}
                                                 >
-                                                    <Text style={styles.playerName}>{player ? player.username : 'BYE'}</Text>
+                                                    <Text style={[styles.playerName, !player && { color: '#666' }]}>{player ? player.username : 'Empty seat'}</Text>
                                                 </TouchableOpacity>
                                             )
                                         })}
@@ -455,6 +502,9 @@ export const TournamentDetailScreen = () => {
                     <View style={{ width: 24 }} />
                 </View>
 
+                {offline && (
+                    <Text style={styles.offlineBanner}>Offline: showing the last saved copy. Results you report are sent when you reconnect.</Text>
+                )}
                 <ScrollView
                     contentContainerStyle={styles.content}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#a855f7" />}
@@ -466,14 +516,35 @@ export const TournamentDetailScreen = () => {
                             <Text style={styles.formatText}>
                                 {tournament?.capacity} Player {tournament?.format === 'commander' ? 'Commander' : 'Single Elimination'}
                             </Text>
+                            {tournament?.league && (
+                                <TouchableOpacity onPress={() => navigation.navigate('LeagueDetail', { id: tournament.league!.id })}>
+                                    <Text style={styles.leagueLink}>League: {tournament.league.name}</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
+
+                    {isOwner && tournament?.status === 'upcoming' && <JoinRequests kind="tournaments" id={id} onApproved={fetchData} />}
 
                     {tournament?.status === 'upcoming' ? renderLobby() : renderBracket()}
 
                     {/* Global Admin Actions */}
                     {isOwner && (
                         <View style={[styles.adminActions, { marginTop: 40, borderTopWidth: 1, borderTopColor: '#2e1065', paddingTop: 20 }]}>
+                            {(myLeagues.length > 0 || tournament?.league) && (
+                                <View>
+                                    <Text style={styles.sectionTitle}>League</Text>
+                                    <Dropdown
+                                        placeholder="Not part of a league"
+                                        options={[
+                                            { label: 'Not part of a league', value: '' },
+                                            ...myLeagues.map(l => ({ label: l.name, value: l.id, hint: 'Results count toward its standings' })),
+                                        ]}
+                                        value={tournament?.league?.id ?? ''}
+                                        onChange={handleSetLeague}
+                                    />
+                                </View>
+                            )}
                             <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteTournament}>
                                 <Trash2 size={20} color="#ef4444" />
                                 <Text style={styles.deleteButtonText}>Delete Tournament</Text>
@@ -493,7 +564,7 @@ export const TournamentDetailScreen = () => {
                 </ScrollView>
 
                 {/* Add User Modal */}
-                <Modal visible={addUserModalVisible} transparent animationType="slide">
+                <Modal visible={addUserModalVisible} transparent animationType="slide" onRequestClose={() => setAddUserModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Participant</Text>
@@ -507,13 +578,7 @@ export const TournamentDetailScreen = () => {
                                 onChange={setIdentifier}
                             />
                             <Text style={styles.orText}>or type a username, email or user ID</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Username, email or U-ID"
-                                placeholderTextColor="#666"
-                                value={identifier}
-                                onChangeText={setIdentifier}
-                            />
+                            <PlayerSearch inputStyle={styles.input} value={identifier} onChange={setIdentifier} />
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity onPress={() => setAddUserModalVisible(false)} style={styles.cancelButton}>
                                     <Text style={styles.cancelText}>Cancel</Text>
@@ -527,7 +592,7 @@ export const TournamentDetailScreen = () => {
                 </Modal>
 
                 {/* Add Group Modal */}
-                <Modal visible={addGroupModalVisible} transparent animationType="slide">
+                <Modal visible={addGroupModalVisible} transparent animationType="slide" onRequestClose={() => setAddGroupModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Play Group</Text>
@@ -551,20 +616,23 @@ export const TournamentDetailScreen = () => {
                 </Modal>
 
                 {/* Commander Result Modal */}
-                <Modal visible={resultModalVisible} transparent animationType="slide">
+                <Modal visible={resultModalVisible} transparent animationType="slide" onRequestClose={() => setResultModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Select 2 Winners</Text>
+                            <Text style={styles.modalTitle}>
+                                {winnersNeeded(selectedMatch) === 1 ? 'Pick the winner of the final' : 'Pick the 2 players moving on'}
+                            </Text>
                             {selectedMatch && [selectedMatch.player1, selectedMatch.player2, selectedMatch.player3, selectedMatch.player4].map((player, idx) => {
                                 const pKey = `p${idx + 1}`;
                                 const isSelected = selectedWinners.includes(pKey);
                                 return (
                                     <TouchableOpacity
                                         key={idx}
-                                        style={[styles.participantRow, isSelected && styles.winner]}
-                                        onPress={() => toggleCommanderWinner(pKey)}
+                                        style={[styles.participantRow, isSelected && styles.winner, !player && { opacity: 0.4 }]}
+                                        onPress={() => player && toggleCommanderWinner(pKey)}
+                                        disabled={!player}
                                     >
-                                        <Text style={styles.participantName}>{player ? player.username : 'BYE'}</Text>
+                                        <Text style={styles.participantName}>{player ? player.username : 'Empty seat'}</Text>
                                         {isSelected && <Trophy size={20} color="#facc15" />}
                                     </TouchableOpacity>
                                 )
@@ -575,10 +643,10 @@ export const TournamentDetailScreen = () => {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={submitCommanderResult}
-                                    style={[styles.confirmButton, selectedWinners.length !== 2 && { opacity: 0.5 }]}
-                                    disabled={selectedWinners.length !== 2}
+                                    style={[styles.confirmButton, selectedWinners.length !== winnersNeeded(selectedMatch) && { opacity: 0.5 }]}
+                                    disabled={selectedWinners.length !== winnersNeeded(selectedMatch)}
                                 >
-                                    <Text style={styles.confirmText}>Confirm Winners</Text>
+                                    <Text style={styles.confirmText}>Confirm</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -625,9 +693,11 @@ const styles = StyleSheet.create({
     vsText: { color: '#666', fontSize: 10, fontWeight: 'bold' },
     podHeader: { backgroundColor: '#2e1065', padding: 8, alignItems: 'center' },
     podTitle: { color: '#a855f7', fontWeight: 'bold', fontSize: 12 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#2e1065' },
-    modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 },
+    leagueLink: { color: '#a855f7', fontSize: 14, marginTop: 4 },
+    offlineBanner: { backgroundColor: '#422006', color: '#facc15', fontSize: 13, paddingVertical: 8, paddingHorizontal: 16 },
+    modalOverlay: modalStyles.overlay,
+    modalContent: modalStyles.card,
+    modalTitle: { ...modalStyles.title, marginBottom: 24 },
     orText: { color: '#888', fontSize: 12, marginBottom: 8 },
     reportRow: { paddingHorizontal: 12, paddingTop: 12 },
     championCard: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#422006', borderColor: '#facc15', borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 24 },

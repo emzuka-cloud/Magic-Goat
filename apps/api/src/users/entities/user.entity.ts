@@ -15,7 +15,7 @@ export class User {
     @Column({ unique: true })
     username: string;
 
-    @Column({ nullable: true })
+    @Column({ nullable: true, unique: true })
     custom_id: string; // For the U-xxxxxxx ID
 
     // Never loaded by default, so it can't leak through relations or responses.

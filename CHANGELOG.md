@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-10-12, home menu)
+
+- The home menu is a 3D carousel (after React Bits' Circular Carousel, cylinder style): swipe to turn it with momentum and it snaps to a card; tap a side card to bring it forward, tap the front card to open it. Arrow buttons below it for mouse and keyboard users. Unread notifications show as a badge on the Notifications card. Respects the system "reduce motion" setting (snaps without animating).
+
+### Changed (2026-10-12, configuration)
+
+- GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR: API type-check, unit tests, build and production-dependency audit (high); client type-check and audit (critical, until the Expo upgrade).
+- Root `README.md` with setup, configuration, test data and tests; the API README (Nest template) now points to it. The API declares Node >= 20.12.
+- API and client read their settings from environment variables, with `.env.example` in each app. API: `PORT`, `POSTGRES_*`, `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `CORS_ORIGINS`, `SEED_OWNER` (loaded from `apps/api/.env` with Node's built-in loader; real env vars win). Client: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_COGNITO_*`, `EXPO_PUBLIC_AUTH_REDIRECT_URLS`. Defaults are the current dev values, so nothing changes without a `.env`.
+- Removed `@nestjs/config` (it was only loading `.env`).
+
+### Added (2026-10-12, offline + search)
+
+- **Offline match results**: reporting a result with no connection saves it on the device, shows it right away and sends it automatically when the connection is back (on reconnect, app start, or the next time the tournament is opened). Your tournament list and each tournament you opened are kept on the device, so they open offline with an "Offline" banner. Results the server rejects later are dropped with a message.
+- **Find any player**: the "Add" dialogs (tournament, league, play group) suggest matching players from the whole app as you type a username or U-ID (`GET /users/search`). Emails are never searched or shown.
+
+### Fixed (2026-10-12, seed)
+
+- `npm run seed` works again (it listed entities by hand and missed newer ones; it now loads all of them). It creates 8 test players; with `SEED_OWNER=<your username>` it also creates a play group and a league owned by you with those players. Removed the unusable admin/password user.
+- Removed unused dependencies left from the old local login: `bcrypt`, `passport-local`, `@nestjs/jwt` (and their types).
+
+### Added (2026-10-12, Commander standings)
+
+- Commander tournaments in a league count toward standings: each player who wins a pod (moves on, or wins the final) gets 3 points and a win; the others in the pod get a loss. A short pod that moved on without playing counts like a bye (win in round 1 only).
+
+### Fixed (2026-10-12, Commander)
+
+- Commander results could not be saved (the result column only allowed 1v1 values); pod results are now stored.
+- Commander pods showed only 2 of their 4 players (seats 3-4 were never loaded).
+- Commander tournaments now finish: pods send two players on, the final pod picks one winner, the tournament becomes COMPLETED and shows a Champion banner. Pods with no more players than move on (byes) advance automatically.
+- Picking winners in a different order no longer changes the result (seats are normalized).
+
+### Added (2026-10-12, join requests)
+
+- **Join with a code, approved by the owner** (tournaments and leagues): owners see a join code and a list of pending requests (approve / decline) on the detail screen; anyone can paste a code from the Tournaments or Leagues list ("Join" button) to send a request. Owners are notified of new requests, requesters are notified of the answer. Tournaments only accept requests before they start and while there is room; asking twice doesn't create a second request.
+- **Move a tournament into or out of a league** after creation (owner, from the tournament screen).
+
+### Security (2026-10-12, join requests)
+
+- `POST /tournaments/:id/join` no longer adds the caller directly; it creates a request the owner must approve.
+
+### Added (2026-10-12, league standings)
+
+- **Tournaments can belong to a league**: pick one of your leagues when creating a tournament, or use "New League Tournament" on the league screen. The league screen lists its tournaments, and a tournament shows its league. League members can open the league's tournaments.
+- **Standings from results, with manual corrections**: standings are calculated from the league's tournament results. The owner can still edit a player's totals; the edit is saved as a correction on top of results, so new results keep counting and the edit is never overwritten. Edited rows show "· edited", and "Use results only" removes the correction. OMW% is always calculated.
+
+### Fixed (2026-10-12, league standings)
+
+- Manual standing edits were overwritten every time the league was opened.
+- Players whose results disappeared (e.g. a tournament removed) kept stale standings.
+- Walkovers through empty bracket branches counted as wins; only a first-round bye counts now.
+
+### Changed (2026-10-12, UI pass)
+
+- One header per screen: the navigator's header is off everywhere; each screen keeps its own title and back button (League list/detail, Create League, Tournament detail and Notifications showed two).
+- The Leagues "+" button sits top-right in the header like Tournaments and Play Groups (was a floating button bottom-right).
+- Dialogs on League, Play Group and Tournament screens share one style (`utils/modalStyles.ts`) and stay at most 420px wide on desktop (Play Group and Tournament dialogs stretched across the window). Tournament dialogs close with the Android back button.
+- Home tiles follow the window size and are capped at 180px (were sized once at load, unbounded).
+- League start dates read "Starts: …" or "Started: …" depending on the date, the same on the list and detail screens.
+- Removed "Success" popups after adding a member, user or group; the list updating is the feedback (they never showed on web).
+
+### Fixed (2026-10-12, UI pass)
+
+- Life counter reset asks for confirmation first.
+- Users are no longer notified about things they did themselves (e.g. adding themselves or their own play group).
+- League standings: "W-D-L" and "Actions" column headers no longer run together.
+
+### Security (2026-10-12, second pass)
+
+- Reading a tournament (and its pairings), league (and its standings) or play group now requires signing in and being its owner or a member (403 otherwise). Standings are no longer recalculated for anonymous callers.
+- Only Cognito ID tokens issued for this app's client are accepted (`aud` and `token_use` checked).
+- Live updates (WebSocket) require a valid sign-in; sockets can only join tournament rooms the user belongs to.
+- CORS allows only known browser origins (`CORS_ORIGINS`, default `http://localhost:8081`) and no longer sends credentials headers.
+- The client no longer logs the Cognito session to the console.
+
+- Every request body is validated (DTO classes + global `ValidationPipe`); unknown fields are dropped and bad values return 400 with a list of what is wrong. A malformed ID returns 400 "Invalid ID." instead of 500.
+- CSV export quotes every field and neutralises values that spreadsheets would run as formulas (e.g. a username starting with `=`). Export filenames are reduced to safe characters, so a tournament name can no longer break the download header (was a 500).
+- User `custom_id` is unique in the database; a rare collision on sign-up is re-rolled instead of failing.
+- Dependencies: applied all non-breaking `npm audit` fixes. API production dependencies now report 0 vulnerabilities (was 74 total incl. 2 critical); client 73 → 35 with 0 critical. Expo 54.0.27 → 54.0.37, expo-font 14.0.10 → 14.0.12.
+
+### Fixed (2026-10-12, second pass)
+
+- Real-time invitations never arrived: nothing joined the `user_<id>` room, and the socket hook never re-rendered with its connection. Sockets now join the user's room on connect.
+
 ### Security (2026-10-12)
 
 - Cognito users are matched by their token `sub` only; an existing account is linked by email only when Cognito reports the email as verified (unverified collisions return 409). Prevents taking over an account by registering the same username.

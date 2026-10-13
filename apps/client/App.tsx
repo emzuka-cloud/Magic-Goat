@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import './aws-config'; // Initialize Amplify
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useOfflineSync } from './hooks/useOfflineSync';
 
 import { GameScreen } from './screens/GameScreen';
 import { LifeCounterScreen } from './screens/LifeCounterScreen';
@@ -29,6 +30,12 @@ import { NotificationsScreen } from './screens/NotificationsScreen';
 
 const Stack = createNativeStackNavigator();
 
+// Sends results recorded offline once the connection is back.
+function OfflineSync() {
+  useOfflineSync();
+  return null;
+}
+
 const AppContent = () => {
   const { user, loading } = useAuth();
   const [isSplashFinished, setIsSplashFinished] = React.useState(false);
@@ -45,10 +52,11 @@ const AppContent = () => {
   return (
     <NavigationContainer>
       <StatusBar style="light" hidden />
+      {user && <OfflineSync />}
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: '#2a2a2a' },
-          headerTintColor: '#fff',
+          // Every screen draws its own header (title + back button); the stack header doubled it up.
+          headerShown: false,
           contentStyle: { backgroundColor: '#1a1a1a' },
         }}
       >

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Unit tests
+        run: npx jest src
+      - name: Build
+        run: npm run build
+      # Production dependencies only; dev tooling (jest, ts-jest) has known moderate advisories.
+      - name: Audit
+        run: npm audit --omit=dev --audit-level=high
+      # Lint is not enforced yet: ~2.6k existing findings, mostly formatting (see PENDING_TASKS.md).
+
+  client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/client/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+      # Critical only until the Expo SDK upgrade: the remaining highs are in the Expo/React Native toolchain.
+      - name: Audit
+        run: npm audit --audit-level=critical

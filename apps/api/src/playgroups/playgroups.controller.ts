@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { PlayGroupsService } from './playgroups.service';
 import { AuthGuard } from '@nestjs/passport';
+import { AddPlayGroupMemberDto, CreatePlayGroupDto } from './dto';
 
 @Controller('playgroups')
 @UseGuards(AuthGuard('jwt'))
@@ -8,7 +9,7 @@ export class PlayGroupsController {
     constructor(private readonly playGroupsService: PlayGroupsService) { }
 
     @Post()
-    create(@Body() createDto: { name: string; description?: string }, @Request() req: any) {
+    create(@Body() createDto: CreatePlayGroupDto, @Request() req: any) {
         // Owner is always the caller; any owner fields in the body are ignored.
         return this.playGroupsService.create(createDto, req.user);
     }
@@ -20,12 +21,12 @@ export class PlayGroupsController {
     }
 
     @Get(':id')
-    findOne(@Param('id') id: string) {
-        return this.playGroupsService.findOne(id);
+    findOne(@Param('id') id: string, @Request() req: any) {
+        return this.playGroupsService.assertCanView(id, req.user.id);
     }
 
     @Post(':id/members')
-    async addMember(@Param('id') id: string, @Body() body: { identifier: string }, @Request() req: any) {
+    async addMember(@Param('id') id: string, @Body() body: AddPlayGroupMemberDto, @Request() req: any) {
         await this.playGroupsService.assertOwner(id, req.user.id);
         return this.playGroupsService.addMember(id, body.identifier);
     }
