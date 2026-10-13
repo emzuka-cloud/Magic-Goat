@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every request body is validated (DTO classes + global `ValidationPipe`); unknown fields are dropped and bad values return 400 with a list of what is wrong. A malformed ID returns 400 "Invalid ID." instead of 500.
 - CSV export quotes every field and neutralises values that spreadsheets would run as formulas (e.g. a username starting with `=`). Export filenames are reduced to safe characters, so a tournament name can no longer break the download header (was a 500).
 - User `custom_id` is unique in the database; a rare collision on sign-up is re-rolled instead of failing.
+- Dependencies: applied all non-breaking `npm audit` fixes. API production dependencies now report 0 vulnerabilities (was 74 total incl. 2 critical); client 73 → 35 with 0 critical. Expo 54.0.27 → 54.0.37, expo-font 14.0.10 → 14.0.12.
 
 ### Fixed (2026-10-12, second pass)
 
