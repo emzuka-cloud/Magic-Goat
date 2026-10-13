@@ -46,7 +46,7 @@ cd apps/client && npx expo start --web --port 8081
 
 - Don't set `CI=1` for Expo — it disables file watching (stale bundle).
 - On Windows, stopping a background `npx` shell can leave the `node` child holding ports 3000/8081.
-- `seed.ts` is broken (see PENDING_TASKS.md); insert test users directly if needed.
+- Test data: `cd apps/api && SEED_OWNER=<your username> npm run seed` (sign in once first) gives you 8 test players (player1-8) in a "Seed Group" play group and "Seed League".
 - Sign-in uses the real Cognito pool, so test with a real account.
 
 ## Tests

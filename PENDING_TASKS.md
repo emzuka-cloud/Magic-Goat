@@ -12,7 +12,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 ## Features / logic
 
 - [ ] League standings recalculate on every GET (members only). Fine at this size; recalculate on result/delete instead if leagues grow large.
-- [ ] **`seed.ts` is broken**: its entity list is missing `Notification` (and `PlayGroup`, `LeagueParticipant`), so it crashes on start.
 - [ ] **Offline sync hook** (`useOfflineSync`) is not mounted anywhere and nothing calls `storage.queueMutation`.
 - [ ] Add a user search endpoint so the player dropdowns can find people outside your play groups.
 
@@ -20,7 +19,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit` (2026-10-12, after non-breaking fixes): API 23 moderate, all dev tooling (jest/ts-jest/autocannon), 0 in production deps. Client 35 (23 high, 12 moderate), all in the Expo/React Native build toolchain (metro, @expo/cli, config plugins); needs an Expo SDK major upgrade (54 → current) and a full app re-test.
-- [ ] Remove unused deps now that local auth is gone: `passport-local`, `@nestjs/jwt`, `@types/passport-local`.
 - [ ] Move `API_URL` and Cognito IDs into env (`EXPO_PUBLIC_*` / API `.env`) and add `.env.example`.
 - [ ] CI (GitHub Actions): lint, test, `npm audit --audit-level=high` per app.
 - [ ] Root README with setup steps (see `CONTEXT.md` for the current ones).
