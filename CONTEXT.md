@@ -25,7 +25,7 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 - **Join requests**: `join-requests/` module (entity with nullable tournament/league FK). `POST /:kind/:id/join` asks, owner uses `GET /:kind/:id/join-requests` and `POST .../:requestId/approve|decline`. Client: `components/JoinWithCode.tsx` (list headers), `components/JoinRequests.tsx` (owner, detail screens). Express 5: no regex route params, use separate routes.
 - **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
 - **Dates**: date-only strings via `utils/dates.ts` (`todayLocal`, `formatDateOnly`, `isValidDateOnly`).
-- **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Single elimination only.
+- **Brackets**: `TournamentsService.resolveByes` advances winners/byes and sets COMPLETED; runs after bracket generation and every result. Commander goes through `resolveCommanderPods` (pods send 2 on, final 1; results are seat lists like `p1_p3` / `p3_win`, see `resultSeats`/`seatsResult` in `pairing.entity.ts`).
 
 ## Running locally
 

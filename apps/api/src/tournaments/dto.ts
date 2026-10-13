@@ -49,8 +49,8 @@ export class CreatePairingDto {
 }
 
 export class PairingResultDto {
-    // p1_win / p2_win for brackets; Commander pods send the two winners, e.g. "p1_p3".
-    @Matches(/^(p[12]_win|draw|p[1-4]_p[1-4])$/, { message: 'Unknown match result.' })
+    // p1_win / p2_win for brackets; Commander pods send the two players moving on ("p1_p3"), the final one winner ("p3_win").
+    @Matches(/^(p[1-4]_win|draw|p[1-4]_p[1-4])$/, { message: 'Unknown match result.' })
     result: string;
 }
 

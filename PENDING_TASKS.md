@@ -11,7 +11,7 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 ## Features / logic
 
-- [ ] **Commander tournaments** (4-player pods): no automatic completion/champion and no bye resolution (`resolveByes` skips them).
+- [ ] Commander results don't count toward league standings yet (standings only read 1v1 pairings). Decide a points scheme for pods first.
 - [ ] League standings recalculate on every GET (members only). Fine at this size; recalculate on result/delete instead if leagues grow large.
 - [ ] Anyone who plays in a league tournament gets a standings row (and so can view the league), even if their league join request was declined. Decide whether that's right.
 - [ ] **`seed.ts` is broken**: its entity list is missing `Notification` (and `PlayGroup`, `LeagueParticipant`), so it crashes on start.

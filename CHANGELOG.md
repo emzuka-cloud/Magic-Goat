@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-10-12, Commander)
+
+- Commander results could not be saved (the result column only allowed 1v1 values); pod results are now stored.
+- Commander pods showed only 2 of their 4 players (seats 3-4 were never loaded).
+- Commander tournaments now finish: pods send two players on, the final pod picks one winner, the tournament becomes COMPLETED and shows a Champion banner. Pods with no more players than move on (byes) advance automatically.
+- Picking winners in a different order no longer changes the result (seats are normalized).
+
 ### Added (2026-10-12, join requests)
 
 - **Join with a code, approved by the owner** (tournaments and leagues): owners see a join code and a list of pending requests (approve / decline) on the detail screen; anyone can paste a code from the Tournaments or Leagues list ("Join" button) to send a request. Owners are notified of new requests, requesters are notified of the answer. Tournaments only accept requests before they start and while there is room; asking twice doesn't create a second request.

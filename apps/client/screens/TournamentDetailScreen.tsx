@@ -302,8 +302,14 @@ export const TournamentDetailScreen = () => {
         }
     };
 
+    // Commander: the last round is the final (one winner); every other pod sends two players on.
+    const lastRound = Math.max(0, ...pairings.map(p => p.round));
+    const winnersNeeded = (p: Pairing | null) => (p && p.round === lastRound ? 1 : 2);
+    const podPlayers = (p: Pairing) => [p.player1, p.player2, p.player3, p.player4].filter(Boolean).length;
+
     const openCommanderResultModal = (pairing: Pairing) => {
-        if (!isOwner) return;
+        // Pods with no more players than move on are decided automatically.
+        if (!isOwner || podPlayers(pairing) <= winnersNeeded(pairing)) return;
         setSelectedMatch(pairing);
         setSelectedWinners([]);
         setResultModalVisible(true);
@@ -313,18 +319,17 @@ export const TournamentDetailScreen = () => {
         if (selectedWinners.includes(pKey)) {
             setSelectedWinners(prev => prev.filter(k => k !== pKey));
         } else {
-            if (selectedWinners.length < 2) {
+            if (selectedWinners.length < winnersNeeded(selectedMatch)) {
                 setSelectedWinners(prev => [...prev, pKey]);
             }
         }
     };
 
     const submitCommanderResult = () => {
-        if (!selectedMatch || selectedWinners.length !== 2) return;
-        // Construct result string e.g. "p1_p2"
-        // Backend expects string containing keys
-        const resultStr = selectedWinners.join('_');
-        handleUpdateResult(selectedMatch.id, resultStr);
+        if (!selectedMatch || selectedWinners.length !== winnersNeeded(selectedMatch)) return;
+        // Seats in order: "p1_p3" for two players moving on, "p3_win" for the final's winner.
+        const seats = [...selectedWinners].sort();
+        handleUpdateResult(selectedMatch.id, seats.length === 1 ? `${seats[0]}_win` : seats.join('_'));
     };
 
     const renderLobby = () => (
@@ -377,8 +382,9 @@ export const TournamentDetailScreen = () => {
         rounds.forEach(list => list.sort((a, b) => a.order - b.order));
         const isCommander = tournament?.format === 'commander';
         const final = rounds.get(sortedRounds[sortedRounds.length - 1])?.[0];
-        const champion = !isCommander && tournament?.status === 'completed' && final
-            ? (final.result === 'p1_win' ? final.player1 : final.result === 'p2_win' ? final.player2 : null)
+        const finalSeat = Number(final?.result.match(/^p([1-4])_win$/)?.[1] ?? 0);
+        const champion = tournament?.status === 'completed' && final && finalSeat
+            ? [final.player1, final.player2, final.player3, final.player4][finalSeat - 1]
             : null;
 
         return (
@@ -411,7 +417,7 @@ export const TournamentDetailScreen = () => {
                                                     style={[styles.playerObj, isSelected && styles.winner]}
                                                     onPress={() => openCommanderResultModal(p)}
                                                 >
-                                                    <Text style={styles.playerName}>{player ? player.username : 'BYE'}</Text>
+                                                    <Text style={[styles.playerName, !player && { color: '#666' }]}>{player ? player.username : 'Empty seat'}</Text>
                                                 </TouchableOpacity>
                                             )
                                         })}
@@ -592,17 +598,20 @@ export const TournamentDetailScreen = () => {
                 <Modal visible={resultModalVisible} transparent animationType="slide" onRequestClose={() => setResultModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Select 2 Winners</Text>
+                            <Text style={styles.modalTitle}>
+                                {winnersNeeded(selectedMatch) === 1 ? 'Pick the winner of the final' : 'Pick the 2 players moving on'}
+                            </Text>
                             {selectedMatch && [selectedMatch.player1, selectedMatch.player2, selectedMatch.player3, selectedMatch.player4].map((player, idx) => {
                                 const pKey = `p${idx + 1}`;
                                 const isSelected = selectedWinners.includes(pKey);
                                 return (
                                     <TouchableOpacity
                                         key={idx}
-                                        style={[styles.participantRow, isSelected && styles.winner]}
-                                        onPress={() => toggleCommanderWinner(pKey)}
+                                        style={[styles.participantRow, isSelected && styles.winner, !player && { opacity: 0.4 }]}
+                                        onPress={() => player && toggleCommanderWinner(pKey)}
+                                        disabled={!player}
                                     >
-                                        <Text style={styles.participantName}>{player ? player.username : 'BYE'}</Text>
+                                        <Text style={styles.participantName}>{player ? player.username : 'Empty seat'}</Text>
                                         {isSelected && <Trophy size={20} color="#facc15" />}
                                     </TouchableOpacity>
                                 )
@@ -613,10 +622,10 @@ export const TournamentDetailScreen = () => {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={submitCommanderResult}
-                                    style={[styles.confirmButton, selectedWinners.length !== 2 && { opacity: 0.5 }]}
-                                    disabled={selectedWinners.length !== 2}
+                                    style={[styles.confirmButton, selectedWinners.length !== winnersNeeded(selectedMatch) && { opacity: 0.5 }]}
+                                    disabled={selectedWinners.length !== winnersNeeded(selectedMatch)}
                                 >
-                                    <Text style={styles.confirmText}>Confirm Winners</Text>
+                                    <Text style={styles.confirmText}>Confirm</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
