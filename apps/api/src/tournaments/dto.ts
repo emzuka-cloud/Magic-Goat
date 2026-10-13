@@ -11,6 +11,10 @@ export class CreateTournamentDto {
     // Bracket math needs a power of two (generatePairings uses log2(capacity)).
     @IsOptional() @IsIn([4, 8, 16, 32, 64])
     capacity?: number;
+
+    /** Count this tournament's results in one of your leagues. */
+    @IsOptional() @IsUUID()
+    leagueId?: string;
 }
 
 export class GroupIdDto {

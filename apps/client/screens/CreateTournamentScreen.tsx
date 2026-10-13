@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Platform, StatusBar, ScrollView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL, getAuthHeaders } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
 import { ArrowLeft, Users, Trophy } from 'lucide-react-native';
+import { Dropdown } from '../components/Dropdown';
+import { useAuth } from '../contexts/AuthContext';
 
 type CreateTournamentNavigationProp = NativeStackNavigationProp<RootStackParamList, 'CreateTournament'>;
 
@@ -15,6 +17,24 @@ export const CreateTournamentScreen = () => {
     const [capacity, setCapacity] = useState<number>(8); // Default 8
     const [format, setFormat] = useState('single_elimination');
     const [loading, setLoading] = useState(false);
+    const route = useRoute<RouteProp<RootStackParamList, 'CreateTournament'>>();
+    const { user } = useAuth();
+    // Results of a league tournament count toward that league's standings. Only your own leagues.
+    const [leagueId, setLeagueId] = useState(route.params?.leagueId ?? '');
+    const [myLeagues, setMyLeagues] = useState<{ id: string; name: string }[]>([]);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch(`${API_URL}/leagues`, { headers: await getAuthHeaders() });
+                if (!res.ok) return;
+                const leagues: { id: string; name: string; created_by?: { username: string } }[] = await res.json();
+                setMyLeagues(leagues.filter(l => l.created_by?.username === user?.username));
+            } catch {
+                // Offline: the league picker just stays hidden.
+            }
+        })();
+    }, [user?.username]);
 
     const handleCreate = async () => {
         if (!name.trim()) {
@@ -31,7 +51,8 @@ export const CreateTournamentScreen = () => {
                 body: JSON.stringify({
                     name,
                     capacity, // 8, 16, 32
-                    format // 'single_elimination' or 'commander'
+                    format, // 'single_elimination' or 'commander'
+                    ...(leagueId ? { leagueId } : {}),
                 }),
             });
 
@@ -112,6 +133,21 @@ export const CreateTournamentScreen = () => {
                             <FormatOption value={32} label="32 Players" />
                         </View>
                     </View>
+
+                    {myLeagues.length > 0 && (
+                        <View style={styles.formGroup}>
+                            <Text style={styles.label}>League (optional)</Text>
+                            <Dropdown
+                                placeholder="Not part of a league"
+                                options={[
+                                    { label: 'Not part of a league', value: '' },
+                                    ...myLeagues.map(l => ({ label: l.name, value: l.id, hint: 'Results count toward its standings' })),
+                                ]}
+                                value={leagueId}
+                                onChange={setLeagueId}
+                            />
+                        </View>
+                    )}
 
                     <TouchableOpacity
                         style={[styles.createButton, loading && styles.disabledButton]}

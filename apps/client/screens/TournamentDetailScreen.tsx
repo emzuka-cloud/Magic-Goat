@@ -45,6 +45,7 @@ interface Tournament {
     capacity: number;
     created_by: User;
     participants: Participant[];
+    league?: { id: string; name: string } | null;
 }
 
 export const TournamentDetailScreen = () => {
@@ -465,6 +466,11 @@ export const TournamentDetailScreen = () => {
                             <Text style={styles.formatText}>
                                 {tournament?.capacity} Player {tournament?.format === 'commander' ? 'Commander' : 'Single Elimination'}
                             </Text>
+                            {tournament?.league && (
+                                <TouchableOpacity onPress={() => navigation.navigate('LeagueDetail', { id: tournament.league!.id })}>
+                                    <Text style={styles.leagueLink}>League: {tournament.league.name}</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
 
@@ -624,6 +630,7 @@ const styles = StyleSheet.create({
     vsText: { color: '#666', fontSize: 10, fontWeight: 'bold' },
     podHeader: { backgroundColor: '#2e1065', padding: 8, alignItems: 'center' },
     podTitle: { color: '#a855f7', fontWeight: 'bold', fontSize: 12 },
+    leagueLink: { color: '#a855f7', fontSize: 14, marginTop: 4 },
     modalOverlay: modalStyles.overlay,
     modalContent: modalStyles.card,
     modalTitle: { ...modalStyles.title, marginBottom: 24 },

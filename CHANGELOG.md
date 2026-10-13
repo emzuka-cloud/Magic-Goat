@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (2026-10-12, league standings)
+
+- **Tournaments can belong to a league**: pick one of your leagues when creating a tournament, or use "New League Tournament" on the league screen. The league screen lists its tournaments, and a tournament shows its league. League members can open the league's tournaments.
+- **Standings from results, with manual corrections**: standings are calculated from the league's tournament results. The owner can still edit a player's totals; the edit is saved as a correction on top of results, so new results keep counting and the edit is never overwritten. Edited rows show "· edited", and "Use results only" removes the correction. OMW% is always calculated.
+
+### Fixed (2026-10-12, league standings)
+
+- Manual standing edits were overwritten every time the league was opened.
+- Players whose results disappeared (e.g. a tournament removed) kept stale standings.
+- Walkovers through empty bracket branches counted as wins; only a first-round bye counts now.
+
 ### Changed (2026-10-12, UI pass)
 
 - One header per screen: the navigator's header is off everywhere; each screen keeps its own title and back button (League list/detail, Create League, Tournament detail and Notifications showed two).

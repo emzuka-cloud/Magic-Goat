@@ -17,5 +17,5 @@ export type RootStackParamList = {
     CreatePlayGroup: undefined;
     PlayGroupDetail: { id: string };
     TournamentList: undefined;
-    CreateTournament: undefined;
+    CreateTournament: { leagueId?: string } | undefined;
 };

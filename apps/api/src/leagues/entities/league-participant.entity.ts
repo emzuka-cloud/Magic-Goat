@@ -34,4 +34,25 @@ export class LeagueParticipant {
 
     @Column({ type: 'float', default: 0 })
     omw_percentage: number;
+
+    // Manual corrections by the league owner, added on top of what tournament results give.
+    // The columns above always hold results + adjustment, so sorting stays in SQL.
+    @Column({ default: 0 })
+    adj_points: number;
+
+    @Column({ default: 0 })
+    adj_matches_played: number;
+
+    @Column({ default: 0 })
+    adj_matches_won: number;
+
+    @Column({ default: 0 })
+    adj_matches_drawn: number;
+
+    @Column({ default: 0 })
+    adj_matches_lost: number;
 }
+
+/** Stats an owner can correct by hand. OMW% is always calculated. */
+export const ADJUSTABLE_STATS = ['points', 'matches_played', 'matches_won', 'matches_drawn', 'matches_lost'] as const;
+export type AdjustableStat = typeof ADJUSTABLE_STATS[number];

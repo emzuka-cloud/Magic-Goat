@@ -55,6 +55,13 @@ export class LeaguesController {
     }
 
     @UseGuards(AuthGuard('jwt'))
+    @Delete(':id/standings/:userId/adjustments')
+    async clearAdjustments(@Param('id') id: string, @Param('userId') userId: string, @Request() req: any) {
+        await this.leaguesService.assertOwner(id, req.user.id);
+        return this.leaguesService.clearAdjustments(id, userId);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
     @Post(':id/members')
     async addMember(@Param('id') id: string, @Body() body: AddPersonDto, @Request() req: any) {
         await this.leaguesService.assertOwner(id, req.user.id);
