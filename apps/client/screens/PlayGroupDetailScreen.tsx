@@ -10,6 +10,7 @@ import { ArrowLeft, Users, UserPlus, Shield, User, Trash2 } from 'lucide-react-n
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { modalStyles } from '../utils/modalStyles';
 
 type PlayGroupDetailRouteProp = RouteProp<RootStackParamList, 'PlayGroupDetail'>;
 type PlayGroupDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'PlayGroupDetail'>;
@@ -188,7 +189,6 @@ export const PlayGroupDetailScreen = () => {
             });
 
             if (response.ok) {
-                Alert.alert('Success', 'Member added successfully');
                 setNewMemberId('');
                 setModalVisible(false);
                 fetchGroupDetails();
@@ -487,28 +487,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         textDecorationLine: 'underline',
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    modalContent: {
-        width: '100%',
-        backgroundColor: '#1a1a2e',
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: '#2e1065',
-    },
-    modalTitle: {
-        color: 'white',
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 8,
-        textAlign: 'center',
-    },
+    modalOverlay: modalStyles.overlay,
+    modalContent: modalStyles.card,
+    modalTitle: { ...modalStyles.title, marginBottom: 8, textAlign: 'center' },
     modalSubtitle: {
         color: '#888',
         fontSize: 14,

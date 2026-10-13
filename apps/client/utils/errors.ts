@@ -34,3 +34,15 @@ export async function showApiError(res: Response, fallback: string) {
 }
 
 export const NETWORK_ERROR = 'Could not reach the server. Check your connection and try again.';
+
+/** Ask before a destructive action. Alert.alert buttons do nothing on web, so use window.confirm there. */
+export function confirmAction(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+    if (Platform.OS === 'web') {
+        if (window.confirm(message)) onConfirm();
+        return;
+    }
+    Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+    ]);
+}

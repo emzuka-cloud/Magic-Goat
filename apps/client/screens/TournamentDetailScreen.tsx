@@ -10,6 +10,7 @@ import { ArrowLeft, Users, Trophy, Trash2, Plus, Play, UserPlus, Shield } from '
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { modalStyles } from '../utils/modalStyles';
 
 type TournamentDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'TournamentDetail'>;
 type RouteParams = { id: string };
@@ -122,7 +123,6 @@ export const TournamentDetailScreen = () => {
             });
 
             if (res.ok) {
-                Alert.alert('Success', 'User added');
                 setAddUserModalVisible(false);
                 setIdentifier('');
                 fetchData();
@@ -148,7 +148,6 @@ export const TournamentDetailScreen = () => {
             });
 
             if (res.ok) {
-                Alert.alert('Success', 'Group members added');
                 setAddGroupModalVisible(false);
                 setGroupId('');
                 fetchData();
@@ -493,7 +492,7 @@ export const TournamentDetailScreen = () => {
                 </ScrollView>
 
                 {/* Add User Modal */}
-                <Modal visible={addUserModalVisible} transparent animationType="slide">
+                <Modal visible={addUserModalVisible} transparent animationType="slide" onRequestClose={() => setAddUserModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Participant</Text>
@@ -527,7 +526,7 @@ export const TournamentDetailScreen = () => {
                 </Modal>
 
                 {/* Add Group Modal */}
-                <Modal visible={addGroupModalVisible} transparent animationType="slide">
+                <Modal visible={addGroupModalVisible} transparent animationType="slide" onRequestClose={() => setAddGroupModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Add Play Group</Text>
@@ -551,7 +550,7 @@ export const TournamentDetailScreen = () => {
                 </Modal>
 
                 {/* Commander Result Modal */}
-                <Modal visible={resultModalVisible} transparent animationType="slide">
+                <Modal visible={resultModalVisible} transparent animationType="slide" onRequestClose={() => setResultModalVisible(false)}>
                     <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Select 2 Winners</Text>
@@ -625,9 +624,9 @@ const styles = StyleSheet.create({
     vsText: { color: '#666', fontSize: 10, fontWeight: 'bold' },
     podHeader: { backgroundColor: '#2e1065', padding: 8, alignItems: 'center' },
     podTitle: { color: '#a855f7', fontWeight: 'bold', fontSize: 12 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#2e1065' },
-    modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 24 },
+    modalOverlay: modalStyles.overlay,
+    modalContent: modalStyles.card,
+    modalTitle: { ...modalStyles.title, marginBottom: 24 },
     orText: { color: '#888', fontSize: 12, marginBottom: 8 },
     reportRow: { paddingHorizontal: 12, paddingTop: 12 },
     championCard: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#422006', borderColor: '#facc15', borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 24 },

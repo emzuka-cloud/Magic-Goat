@@ -133,6 +133,7 @@ export class LeaguesService {
             'Added to League',
             `You have been added to the league "${league.name}"`,
             league.id,
+            league.created_by?.id, // only the owner can add people
         );
 
         return savedParticipant;
@@ -168,6 +169,7 @@ export class LeaguesService {
                     'Added to League',
                     `You have been added to the league "${league.name}" via your playgroup`,
                     league.id,
+                    league.created_by?.id,
                 );
             }
         }

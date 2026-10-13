@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (2026-10-12, UI pass)
+
+- One header per screen: the navigator's header is off everywhere; each screen keeps its own title and back button (League list/detail, Create League, Tournament detail and Notifications showed two).
+- The Leagues "+" button sits top-right in the header like Tournaments and Play Groups (was a floating button bottom-right).
+- Dialogs on League, Play Group and Tournament screens share one style (`utils/modalStyles.ts`) and stay at most 420px wide on desktop (Play Group and Tournament dialogs stretched across the window). Tournament dialogs close with the Android back button.
+- Home tiles follow the window size and are capped at 180px (were sized once at load, unbounded).
+- League start dates read "Starts: …" or "Started: …" depending on the date, the same on the list and detail screens.
+- Removed "Success" popups after adding a member, user or group; the list updating is the feedback (they never showed on web).
+
+### Fixed (2026-10-12, UI pass)
+
+- Life counter reset asks for confirmation first.
+- Users are no longer notified about things they did themselves (e.g. adding themselves or their own play group).
+- League standings: "W-D-L" and "Actions" column headers no longer run together.
+
 ### Security (2026-10-12, second pass)
 
 - Reading a tournament (and its pairings), league (and its standings) or play group now requires signing in and being its owner or a member (403 otherwise). Standings are no longer recalculated for anonymous callers.
