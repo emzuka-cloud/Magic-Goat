@@ -16,6 +16,7 @@ Magic G.O.A.T — Magic: The Gathering play-group / tournament / league app.
 - **Sockets**: client sends the ID token as `auth.token` (`hooks/useSocket.ts`); server joins `user_<id>` on connect and checks membership on `join_tournament`.
 - **CORS**: `src/cors.ts`, allowlist from `CORS_ORIGINS` (comma-separated, default `http://localhost:8081`). Use `localhost`, not `127.0.0.1`, for the web client.
 - **Users**: `findOrCreateUser` (users.service.ts) matches by Cognito `sub`; links by email only if `email_verified`. `password_hash` and `email` are `select: false`.
+- **Validation**: every body/query is a DTO class (`<module>/dto.ts`, `class-validator`); global `ValidationPipe({ whitelist: true, transform: true })` in `main.ts`. Malformed UUIDs become 400 via `query-error.filter.ts`. New routes need a DTO, or the pipe skips validation.
 - **Errors (API)**: throw Nest HTTP exceptions with a user-readable message — never `throw new Error(...)` (becomes a 500).
 - **Errors (client)**: on a failed fetch use `showApiError(res, 'Could not …')`; on a thrown fetch use `showError(NETWORK_ERROR)` (`utils/errors.ts`). Works on web.
 - **Pick lists**: `components/Dropdown.tsx` + `hooks/useMyPlayGroups.ts` (players/groups from the caller's play groups).
@@ -46,7 +47,7 @@ cd apps/client && npx expo start --web --port 8081
 
 ## Tests
 
-- API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution, completion, view check), events.gateway.spec (socket auth + room check).
+- API: `cd apps/api && npx jest src` — users.service.spec (account-takeover cases), tournaments.service.spec (bye resolution, completion, view check), events.gateway.spec (socket auth + room check), validation.spec (DTOs + invalid-ID filter).
 - Type-check: `npx tsc --noEmit -p tsconfig.json` in each app.
 - Browser testing on web: `window.alert`/`confirm` block automation; override them first (`window.alert = m => console.log(m)`).
 

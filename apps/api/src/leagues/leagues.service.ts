@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateLeagueDto, UpdateLeagueDto, UpdateStandingDto } from './dto';
 import { League } from './entities/league.entity';
 import { LeagueParticipant } from './entities/league-participant.entity';
 import { Tournament } from '../tournaments/entities/tournament.entity';
@@ -29,7 +30,7 @@ export class LeaguesService {
         }
     }
 
-    async create(createLeagueDto: { name: string; description?: string; start_date: Date; end_date?: Date }, user: User): Promise<League> {
+    async create(createLeagueDto: CreateLeagueDto, user: User): Promise<League> {
         if (!createLeagueDto.name?.trim() || !createLeagueDto.start_date) {
             throw new BadRequestException('A league needs a name and a start date.');
         }
@@ -80,7 +81,7 @@ export class LeaguesService {
         return league;
     }
 
-    async update(id: string, updateLeagueDto: Partial<League>): Promise<League> {
+    async update(id: string, updateLeagueDto: UpdateLeagueDto): Promise<League> {
         const league = await this.findOne(id);
         // Whitelist editable fields; never let the body overwrite id/created_by/relations.
         const { name, description, start_date, end_date } = updateLeagueDto;
@@ -172,7 +173,7 @@ export class LeaguesService {
         }
     }
 
-    async updateStanding(leagueId: string, userId: string, updates: Partial<LeagueParticipant>): Promise<LeagueParticipant> {
+    async updateStanding(leagueId: string, userId: string, updates: UpdateStandingDto): Promise<LeagueParticipant> {
         let participant = await this.leagueParticipantsRepository.findOne({
             where: { league: { id: leagueId }, user: { id: userId } },
             relations: ['user', 'league']

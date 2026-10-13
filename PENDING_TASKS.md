@@ -23,7 +23,6 @@ Last updated: 2026-10-12. Security findings that are still open are tracked priv
 
 ## Engineering
 
-- [ ] Global `ValidationPipe({ whitelist: true })` + DTO classes (`class-validator`) instead of `any` bodies. Also `ParseUUIDPipe` on `:id` params (a malformed ID is currently a 500).
 - [ ] Replace `synchronize: true` with TypeORM migrations before any production deploy.
 - [ ] `npm audit`: API 74 / client 73 known vulnerabilities (as of 2026-10-12); upgrade Nest/Expo and re-test. Expo also warns `expo` 54.0.27 → ~54.0.37, `expo-font` → ~14.0.12.
 - [ ] Remove unused deps now that local auth is gone: `passport-local`, `@nestjs/jwt`, `@types/passport-local`.
