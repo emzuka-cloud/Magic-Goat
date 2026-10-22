@@ -1,8 +1,9 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { passportJwtSecret } from 'jwks-rsa';
 import { UsersService } from '../users/users.service';
+import { COGNITO_CLIENT_ID, COGNITO_ISSUER, COGNITO_JWKS_URI } from './cognito';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -14,14 +15,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 cache: true,
                 rateLimit: true,
                 jwksRequestsPerMinute: 5,
-                jwksUri: 'https://cognito-idp.us-east-2.amazonaws.com/us-east-2_irm6sACmh/.well-known/jwks.json',
+                jwksUri: COGNITO_JWKS_URI,
             }),
-            issuer: 'https://cognito-idp.us-east-2.amazonaws.com/us-east-2_irm6sACmh',
+            issuer: COGNITO_ISSUER,
+            // Cognito ID tokens carry the app client ID as `aud`; tokens for other clients of the pool are rejected.
+            audience: COGNITO_CLIENT_ID,
             algorithms: ['RS256'],
         });
     }
 
     async validate(payload: any) {
+        // Only ID tokens: access tokens have no `aud` and no email claims.
+        if (payload.token_use !== 'id') throw new UnauthorizedException('Use a Cognito ID token.');
         // Find or create user in local DB to ensure FK constraints work
         return this.usersService.findOrCreateUser(payload);
     }

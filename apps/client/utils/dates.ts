@@ -10,3 +10,7 @@ export const formatDateOnly = (value: string) => new Date(`${value.slice(0, 10)}
 
 export const isValidDateOnly = (value: string) =>
     /^\d{4}-\d{2}-\d{2}$/.test(value) && !isNaN(new Date(`${value}T00:00:00`).getTime());
+
+/** "Starts: 10/20/2026" for a future date, "Started: 10/12/2026" from that day on. Same wording on every screen. */
+export const startLabel = (value: string) =>
+    `${value.slice(0, 10) > todayLocal() ? 'Starts' : 'Started'}: ${formatDateOnly(value)}`;

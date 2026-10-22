@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNetworkStatus } from './useNetworkStatus';
 import { storage, PendingMutation } from '../utils/storage';
 import { API_URL, getAuthHeaders } from '../config';
@@ -18,71 +18,53 @@ function requestFor(mutation: PendingMutation): { path: string; method: string; 
 // 401 (session expired) and 429 (rate limited) may succeed later; other 4xx never will.
 const isPermanent = (status: number) => status >= 400 && status < 500 && status !== 401 && status !== 429;
 
-export const useOfflineSync = () => {
-    const isOnline = useNetworkStatus();
-    const [isSyncing, setIsSyncing] = useState(false);
-    const [syncError, setSyncError] = useState<string | null>(null);
+let syncing: Promise<void> | null = null;
 
-    useEffect(() => {
-        if (isOnline && !isSyncing) {
-            syncPendingMutations();
-        }
-    }, [isOnline]);
-
-    const syncPendingMutations = async () => {
-        setIsSyncing(true);
-        setSyncError(null);
+/**
+ * Send changes saved while offline, oldest first. Safe to call any time (no-op when the queue is empty,
+ * and concurrent calls share one run). Changes the server rejects are dropped and the user is told why;
+ * temporary failures stay queued for the next call.
+ */
+export function syncPendingMutations(): Promise<void> {
+    syncing ??= (async () => {
         const rejected: string[] = [];
-        let retryLater = false;
-
         try {
             const mutations = await storage.getPendingMutations();
+            if (!mutations.length) return;
             const headers = await getAuthHeaders();
-
             for (const mutation of mutations) {
                 const req = requestFor(mutation);
                 if (!req) {
                     await storage.clearMutation(mutation.id);
                     continue;
                 }
-                try {
-                    const res = await fetch(`${API_URL}${req.path}`, {
-                        method: req.method,
-                        headers,
-                        body: req.body ? JSON.stringify(req.body) : undefined,
-                    });
-                    if (res.ok) {
-                        await storage.clearMutation(mutation.id);
-                    } else if (isPermanent(res.status)) {
-                        // The server will never accept this change; drop it and tell the user why.
-                        rejected.push(await apiErrorMessage(res, 'A change made offline could not be saved.'));
-                        await storage.clearMutation(mutation.id);
-                    } else {
-                        retryLater = true;
-                    }
-                } catch {
-                    retryLater = true; // Network dropped again; keep it queued.
+                const res = await fetch(`${API_URL}${req.path}`, {
+                    method: req.method,
+                    headers,
+                    body: req.body ? JSON.stringify(req.body) : undefined,
+                }).catch(() => null);
+                if (!res) break; // Still offline: keep this and everything after it, in order.
+                if (res.ok) {
+                    await storage.clearMutation(mutation.id);
+                } else if (isPermanent(res.status)) {
+                    rejected.push(await apiErrorMessage(res, 'A change made offline could not be saved.'));
+                    await storage.clearMutation(mutation.id);
                 }
             }
-        } catch (error) {
-            retryLater = true;
         } finally {
-            setIsSyncing(false);
+            syncing = null;
         }
-
         if (rejected.length) {
-            const message = `Some changes made offline were not saved:\n${[...new Set(rejected)].join('\n')}`;
-            setSyncError(message);
-            showError(message, 'Sync failed');
-        } else if (retryLater) {
-            setSyncError('Some offline changes have not synced yet. They will be retried automatically.');
+            showError(`Some changes made offline were not saved:\n${[...new Set(rejected)].join('\n')}`, 'Sync failed');
         }
-    };
+    })();
+    return syncing;
+}
 
-    return {
-        isOnline,
-        isSyncing,
-        syncError,
-        syncPendingMutations,
-    };
+/** Mounted once for the signed-in app: syncs at start and every time the connection comes back. */
+export const useOfflineSync = () => {
+    const isOnline = useNetworkStatus();
+    useEffect(() => {
+        if (isOnline) syncPendingMutations();
+    }, [isOnline]);
 };

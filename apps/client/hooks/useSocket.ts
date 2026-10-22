@@ -1,30 +1,27 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import io, { Socket } from 'socket.io-client';
+import { fetchAuthSession } from 'aws-amplify/auth';
+import { API_URL } from '../config';
 
-const SOCKET_URL = 'http://localhost:3000'; // Adjust if running on device/emulator
-
+/** Authenticated socket; the server puts it in the caller's `user_<id>` room. */
 export const useSocket = () => {
-    const socketRef = useRef<Socket | null>(null);
+    const [socket, setSocket] = useState<Socket | null>(null);
 
     useEffect(() => {
-        socketRef.current = io(SOCKET_URL, {
-            transports: ['websocket'],
-        });
-
-        socketRef.current.on('connect', () => {
-            console.log('Socket connected:', socketRef.current?.id);
-        });
-
-        socketRef.current.on('disconnect', () => {
-            console.log('Socket disconnected');
-        });
+        let s: Socket | null = null;
+        let cancelled = false;
+        fetchAuthSession().then((session) => {
+            const token = session.tokens?.idToken?.toString();
+            if (cancelled || !token) return;
+            s = io(API_URL, { transports: ['websocket'], auth: { token } });
+            setSocket(s);
+        }).catch(() => { /* not signed in: no live updates */ });
 
         return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-            }
+            cancelled = true;
+            s?.disconnect();
         };
     }, []);
 
-    return socketRef.current;
+    return socket;
 };

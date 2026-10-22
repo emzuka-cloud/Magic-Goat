@@ -1,13 +1,36 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateLeagueDto, UpdateLeagueDto, UpdateStandingDto } from './dto';
 import { League } from './entities/league.entity';
-import { LeagueParticipant } from './entities/league-participant.entity';
+import { ADJUSTABLE_STATS, AdjustableStat, LeagueParticipant } from './entities/league-participant.entity';
 import { Tournament } from '../tournaments/entities/tournament.entity';
-import { Pairing } from '../tournaments/entities/pairing.entity';
+import { Pairing, resultSeats } from '../tournaments/entities/pairing.entity';
+import { TournamentFormat } from '../tournaments/entities/tournament.entity';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { JoinRequestsService } from '../join-requests/join-requests.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+
+type Results = Record<AdjustableStat, number>;
+const EMPTY_RESULTS: Results = { points: 0, matches_played: 0, matches_won: 0, matches_drawn: 0, matches_lost: 0 };
+
+/** Stored total = what results give + the owner's adjustment. */
+export function applyResults(p: LeagueParticipant, results: Results, omw: number) {
+    for (const stat of ADJUSTABLE_STATS) p[stat] = results[stat] + (p[`adj_${stat}`] ?? 0);
+    p.omw_percentage = omw;
+}
+
+/** Owner typed new totals: keep them by storing their difference from the results. Expects current totals. */
+export function setTotals(p: LeagueParticipant, totals: Partial<Results>) {
+    for (const stat of ADJUSTABLE_STATS) {
+        const wanted = totals[stat];
+        if (wanted === undefined) continue;
+        const fromResults = p[stat] - (p[`adj_${stat}`] ?? 0);
+        p[`adj_${stat}`] = wanted - fromResults;
+        p[stat] = wanted;
+    }
+}
 
 @Injectable()
 export class LeaguesService {
@@ -21,7 +44,50 @@ export class LeaguesService {
         @InjectRepository(Pairing)
         private pairingsRepository: Repository<Pairing>,
         private notificationsService: NotificationsService,
+        private joinRequests: JoinRequestsService,
     ) { }
+
+    /** Anyone with the league's code can ask to join; the owner approves or declines. */
+    async requestToJoin(leagueId: string, user: User) {
+        const league = await this.findOne(leagueId);
+        const isMember = league.created_by?.id === user.id || await this.leagueParticipantsRepository.exists({
+            where: { league: { id: leagueId }, user: { id: user.id } },
+        });
+        if (isMember) throw new BadRequestException('You are already in this league.');
+        const { request, created } = await this.joinRequests.request({ league: { id: leagueId } }, user);
+        if (created && league.created_by) {
+            await this.notificationsService.create(
+                league.created_by.id,
+                NotificationType.LEAGUE_JOIN_REQUEST,
+                'Join request',
+                `${user.username} asked to join "${league.name}"`,
+                league.id,
+            );
+        }
+        return { id: request.id, status: request.status, league: { id: league.id, name: league.name } };
+    }
+
+    async pendingJoinRequests(leagueId: string) {
+        const requests = await this.joinRequests.pending({ league: { id: leagueId } });
+        return requests.map((r) => ({ id: r.id, created_at: r.created_at, user: { id: r.user.id, username: r.user.username } }));
+    }
+
+    async answerJoinRequest(leagueId: string, requestId: string, approve: boolean) {
+        const league = await this.findOne(leagueId);
+        const request = await this.joinRequests.decide(requestId, { league: { id: leagueId } }, approve, async (r) => {
+            if (approve) await this.addMember(leagueId, r.user.id); // tells them they're in
+        });
+        if (!approve) {
+            await this.notificationsService.create(
+                request.user.id,
+                NotificationType.JOIN_DECLINED,
+                'Join request declined',
+                `Your request to join "${league.name}" was declined.`,
+                league.id,
+            );
+        }
+        return { id: request.id, status: request.status };
+    }
 
     private assertValidDates(dates: (Date | string | undefined | null)[]) {
         if (dates.some(d => d != null && isNaN(new Date(d).getTime()))) {
@@ -29,7 +95,7 @@ export class LeaguesService {
         }
     }
 
-    async create(createLeagueDto: { name: string; description?: string; start_date: Date; end_date?: Date }, user: User): Promise<League> {
+    async create(createLeagueDto: CreateLeagueDto, user: User): Promise<League> {
         if (!createLeagueDto.name?.trim() || !createLeagueDto.start_date) {
             throw new BadRequestException('A league needs a name and a start date.');
         }
@@ -69,7 +135,18 @@ export class LeaguesService {
         if (league.created_by?.id !== userId) throw new ForbiddenException('Only the league owner can do this.');
     }
 
-    async update(id: string, updateLeagueDto: Partial<League>): Promise<League> {
+    /** Owner or participant; returns the league so callers don't load it twice. */
+    async assertCanView(leagueId: string, userId: string): Promise<League> {
+        const league = await this.findOne(leagueId);
+        if (league.created_by?.id === userId) return league;
+        const isMember = await this.leagueParticipantsRepository.exists({
+            where: { league: { id: leagueId }, user: { id: userId } },
+        });
+        if (!isMember) throw new ForbiddenException('You are not part of this league.');
+        return league;
+    }
+
+    async update(id: string, updateLeagueDto: UpdateLeagueDto): Promise<League> {
         const league = await this.findOne(id);
         // Whitelist editable fields; never let the body overwrite id/created_by/relations.
         const { name, description, start_date, end_date } = updateLeagueDto;
@@ -121,6 +198,7 @@ export class LeaguesService {
             'Added to League',
             `You have been added to the league "${league.name}"`,
             league.id,
+            league.created_by?.id, // only the owner can add people
         );
 
         return savedParticipant;
@@ -156,39 +234,43 @@ export class LeaguesService {
                     'Added to League',
                     `You have been added to the league "${league.name}" via your playgroup`,
                     league.id,
+                    league.created_by?.id,
                 );
             }
         }
     }
 
-    async updateStanding(leagueId: string, userId: string, updates: Partial<LeagueParticipant>): Promise<LeagueParticipant> {
-        let participant = await this.leagueParticipantsRepository.findOne({
-            where: { league: { id: leagueId }, user: { id: userId } },
-            relations: ['user', 'league']
-        });
-
-        if (!participant) {
-            const league = await this.findOne(leagueId);
-            const usersRepository = this.leagueParticipantsRepository.manager.getRepository(User);
-            const user = await usersRepository.findOne({ where: { id: userId } });
-            if (!user) throw new NotFoundException('User not found');
-
-            participant = this.leagueParticipantsRepository.create({ league, user });
-        }
-
-        // Update fields
-        if (updates.points !== undefined) participant.points = updates.points;
-        if (updates.matches_played !== undefined) participant.matches_played = updates.matches_played;
-        if (updates.matches_won !== undefined) participant.matches_won = updates.matches_won;
-        if (updates.matches_drawn !== undefined) participant.matches_drawn = updates.matches_drawn;
-        if (updates.matches_lost !== undefined) participant.matches_lost = updates.matches_lost;
-        if (updates.omw_percentage !== undefined) participant.omw_percentage = updates.omw_percentage;
-
+    /**
+     * The owner sets the totals they want to show; we store the difference from the results as an
+     * adjustment, so later results still count and the correction is kept.
+     */
+    async updateStanding(leagueId: string, userId: string, updates: UpdateStandingDto): Promise<LeagueParticipant> {
+        await this.updateStandings(leagueId); // stored totals must be current before we diff against them
+        const participant = await this.findParticipant(leagueId, userId);
+        setTotals(participant, updates);
         return this.leagueParticipantsRepository.save(participant);
     }
 
+    /** Drop the owner's corrections for this player; standings go back to what results give. */
+    async clearAdjustments(leagueId: string, userId: string): Promise<LeagueParticipant> {
+        const participant = await this.findParticipant(leagueId, userId);
+        for (const stat of ADJUSTABLE_STATS) participant[`adj_${stat}`] = 0;
+        await this.leagueParticipantsRepository.save(participant);
+        await this.updateStandings(leagueId);
+        return this.findParticipant(leagueId, userId);
+    }
+
+    private async findParticipant(leagueId: string, userId: string): Promise<LeagueParticipant> {
+        const participant = await this.leagueParticipantsRepository.findOne({
+            where: { league: { id: leagueId }, user: { id: userId } },
+            relations: ['user'],
+        });
+        if (!participant) throw new NotFoundException('This player is not in the league.');
+        return participant;
+    }
+
     async getStandings(leagueId: string): Promise<LeagueParticipant[]> {
-        // Trigger update before returning standings (for MVP simplicity)
+        // ponytail: recalculates (DB writes) on every read; members-only now, move to result-write time if load matters.
         await this.updateStandings(leagueId);
 
         return this.leagueParticipantsRepository.find({
@@ -219,11 +301,16 @@ export class LeaguesService {
         for (const tournament of tournaments) {
             const pairings = await this.pairingsRepository.find({
                 where: { tournament: { id: tournament.id } },
-                relations: ['player1', 'player2'],
+                relations: ['player1', 'player2', 'player3', 'player4'],
             });
 
             for (const pairing of pairings) {
                 if (!pairing.result || pairing.result === 'pending') continue;
+
+                if (tournament.format === TournamentFormat.COMMANDER) {
+                    this.scoreCommanderPod(userStats, pairing);
+                    continue;
+                }
 
                 const p1 = pairing.player1;
                 const p2 = pairing.player2;
@@ -254,8 +341,9 @@ export class LeaguesService {
                         if (stats1) { stats1.points += 1; stats1.matches_drawn++; }
                         if (stats2) { stats2.points += 1; stats2.matches_drawn++; }
                     }
-                } else if (p1 && !p2 && pairing.result === 'p1_win') {
-                    // Bye
+                } else if (p1 && !p2 && pairing.result === 'p1_win' && pairing.round === 1) {
+                    // A first-round bye counts as a win (MTG convention). Later rounds with an empty slot are
+                    // walkovers through empty bracket branches, not matches, so they don't score.
                     const stats1 = userStats.get(p1.id);
                     if (stats1) { stats1.points += 3; stats1.matches_won++; stats1.matches_played++; }
                 }
@@ -270,40 +358,48 @@ export class LeaguesService {
             stats.mw_percentage = mw;
         }
 
-        // Calculate OMW% and save
+        // Every row is rewritten (members without results go back to 0 + their adjustment), and
+        // anyone who played a league tournament without being a member gets a row.
+        const participants = await this.leagueParticipantsRepository.find({
+            where: { league: { id: leagueId } },
+            relations: ['user'],
+        });
+        const byUser = new Map(participants.map((p) => [p.user.id, p]));
         for (const [userId, stats] of userStats) {
-            let omwSum = 0;
-            let opponentCount = 0;
+            if (!byUser.has(userId)) byUser.set(userId, this.leagueParticipantsRepository.create({ league, user: stats.user }));
+        }
 
-            stats.opponents.forEach(oppId => {
-                const oppStats = userStats.get(oppId);
-                if (oppStats && oppStats.mw_percentage) {
-                    omwSum += oppStats.mw_percentage;
-                    opponentCount++;
-                }
-            });
-
-            const omw_percentage = opponentCount > 0 ? omwSum / opponentCount : 0.33;
-
-            let participant = await this.leagueParticipantsRepository.findOne({
-                where: { league: { id: leagueId }, user: { id: userId } },
-            });
-
-            if (!participant) {
-                participant = this.leagueParticipantsRepository.create({
-                    league,
-                    user: stats.user,
-                });
+        for (const [userId, participant] of byUser) {
+            const stats = userStats.get(userId);
+            let omw_percentage = 0;
+            if (stats) {
+                const opponentMw = [...stats.opponents].map((id) => userStats.get(id)?.mw_percentage).filter((mw): mw is number => !!mw);
+                omw_percentage = opponentMw.length ? opponentMw.reduce((a, b) => a + b, 0) / opponentMw.length : 0.33;
             }
+            applyResults(participant, stats ?? EMPTY_RESULTS, omw_percentage);
+        }
 
-            participant.points = stats.points;
-            participant.matches_played = stats.matches_played;
-            participant.matches_won = stats.matches_won;
-            participant.matches_drawn = stats.matches_drawn;
-            participant.matches_lost = stats.matches_lost;
-            participant.omw_percentage = omw_percentage;
+        await this.leagueParticipantsRepository.save([...byUser.values()]);
+    }
 
-            await this.leagueParticipantsRepository.save(participant);
+    /**
+     * Commander pod: every player who wins it (moves on, or wins the final) gets 3 points and a win; the
+     * rest of the pod a loss. A short pod that moved on without playing scores like a bye: a win in round 1,
+     * nothing in later rounds.
+     */
+    private scoreCommanderPod(userStats: Map<string, any>, pairing: Pairing) {
+        const seats = [pairing.player1, pairing.player2, pairing.player3, pairing.player4];
+        const seated = seats.filter((u): u is User => !!u);
+        const winners = new Set(resultSeats(pairing.result).map((s) => seats[s - 1]?.id));
+        const played = seated.length > winners.size;
+        if (!played && pairing.round !== 1) return;
+        for (const user of seated) {
+            this.initUserStats(userStats, user);
+            const stats = userStats.get(user.id);
+            stats.matches_played++;
+            if (played) for (const other of seated) if (other.id !== user.id) stats.opponents.add(other.id);
+            if (winners.has(user.id)) { stats.points += 3; stats.matches_won++; }
+            else stats.matches_lost++;
         }
     }
 

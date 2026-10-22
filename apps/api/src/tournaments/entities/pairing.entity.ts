@@ -7,7 +7,26 @@ export enum PairingResult {
     P1_WIN = 'p1_win',
     P2_WIN = 'p2_win',
     DRAW = 'draw',
+    // Commander pods: the final has one winner (any seat); earlier pods send two players on,
+    // written as their seats in order. A short pod that auto-advances one player uses pN_win.
+    P3_WIN = 'p3_win',
+    P4_WIN = 'p4_win',
+    P1_P2 = 'p1_p2',
+    P1_P3 = 'p1_p3',
+    P1_P4 = 'p1_p4',
+    P2_P3 = 'p2_p3',
+    P2_P4 = 'p2_p4',
+    P3_P4 = 'p3_p4',
 }
+
+/** Seats (1-4) a result sends on: "p1_p3" -> [1, 3], "p2_win" -> [2], "pending" -> []. */
+export const resultSeats = (result: string): number[] => [...result.matchAll(/p([1-4])/g)].map((m) => Number(m[1]));
+
+/** Result string for these seats in a Commander pod (sorted, so "p3_p1" and "p1_p3" are the same). */
+export const seatsResult = (seats: number[]): PairingResult => {
+    const s = [...seats].sort();
+    return (s.length === 1 ? `p${s[0]}_win` : `p${s[0]}_p${s[1]}`) as PairingResult;
+};
 
 @Entity('pairings')
 export class Pairing {

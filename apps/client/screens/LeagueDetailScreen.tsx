@@ -6,11 +6,14 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
-import { formatDateOnly } from '../utils/dates';
+import { startLabel } from '../utils/dates';
 import { useAuth, getAuthToken } from '../contexts/AuthContext';
-import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2 } from 'lucide-react-native';
+import { ArrowLeft, Users, UserPlus, Trash2, X, Edit2, Trophy, Plus } from 'lucide-react-native';
 import { Dropdown } from '../components/Dropdown';
 import { useMyPlayGroups } from '../hooks/useMyPlayGroups';
+import { modalStyles } from '../utils/modalStyles';
+import { JoinRequests } from '../components/JoinRequests';
+import { PlayerSearch } from '../components/PlayerSearch';
 
 type LeagueDetailRouteProp = RouteProp<RootStackParamList, 'LeagueDetail'>;
 type LeagueDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'LeagueDetail'>;
@@ -24,7 +27,16 @@ interface Standing {
     matches_drawn: number;
     matches_lost: number;
     omw_percentage: number;
+    // Owner's manual corrections on top of tournament results.
+    adj_points: number;
+    adj_matches_played: number;
+    adj_matches_won: number;
+    adj_matches_drawn: number;
+    adj_matches_lost: number;
 }
+
+const isAdjusted = (s: Standing) =>
+    !!(s.adj_points || s.adj_matches_played || s.adj_matches_won || s.adj_matches_drawn || s.adj_matches_lost);
 
 interface LeagueDetail {
     id: string;
@@ -32,6 +44,7 @@ interface LeagueDetail {
     description?: string;
     start_date: string;
     created_by: { id: string; username: string };
+    tournaments?: { id: string; name: string; status: string; format: string }[];
 }
 
 export const LeagueDetailScreen = () => {
@@ -52,7 +65,7 @@ export const LeagueDetailScreen = () => {
     const [editingStanding, setEditingStanding] = useState(false);
 
     // Edit standing state
-    const [editingUser, setEditingUser] = useState<{ id: string; username: string } | null>(null);
+    const [editingUser, setEditingUser] = useState<Standing | null>(null);
     const [editPoints, setEditPoints] = useState('');
     const [editMatchesPlayed, setEditMatchesPlayed] = useState('');
     const [editMatchesWon, setEditMatchesWon] = useState('');
@@ -135,7 +148,7 @@ export const LeagueDetailScreen = () => {
     };
 
     const openEditStanding = (standing: Standing) => {
-        setEditingUser({ id: standing.user.id, username: standing.user.username });
+        setEditingUser(standing);
         setEditPoints(standing.points.toString());
         setEditMatchesPlayed(standing.matches_played.toString());
         setEditMatchesWon(standing.matches_won.toString());
@@ -152,19 +165,21 @@ export const LeagueDetailScreen = () => {
             const token = await getAuthToken();
             if (!token) return;
 
-            const response = await fetch(`${API_URL}/leagues/${id}/standings/${editingUser.id}`, {
+            const response = await fetch(`${API_URL}/leagues/${id}/standings/${editingUser.user.id}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    points: parseInt(editPoints) || 0,
-                    matches_played: parseInt(editMatchesPlayed) || 0,
-                    matches_won: parseInt(editMatchesWon) || 0,
-                    matches_drawn: parseInt(editMatchesDrawn) || 0,
-                    matches_lost: parseInt(editMatchesLost) || 0,
-                }),
+                // Only send what the owner changed; untouched stats keep following tournament results.
+                body: JSON.stringify(Object.fromEntries(Object.entries({
+                    points: editPoints,
+                    matches_played: editMatchesPlayed,
+                    matches_won: editMatchesWon,
+                    matches_drawn: editMatchesDrawn,
+                    matches_lost: editMatchesLost,
+                }).map(([k, v]) => [k, parseInt(v) || 0])
+                  .filter(([k, v]) => v !== editingUser[k as keyof Standing]))),
             });
 
             if (response.ok) {
@@ -172,6 +187,29 @@ export const LeagueDetailScreen = () => {
                 fetchLeagueDetails();
             } else {
                 await showApiError(response, 'Could not update the standing.');
+            }
+        } catch (error) {
+            showError(NETWORK_ERROR);
+        } finally {
+            setEditingStanding(false);
+        }
+    };
+
+    const handleUseResultsOnly = async () => {
+        if (!editingUser) return;
+        setEditingStanding(true);
+        try {
+            const token = await getAuthToken();
+            if (!token) return;
+            const response = await fetch(`${API_URL}/leagues/${id}/standings/${editingUser.user.id}/adjustments`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (response.ok) {
+                setEditStandingModalVisible(false);
+                fetchLeagueDetails();
+            } else {
+                await showApiError(response, 'Could not reset the standing.');
             }
         } catch (error) {
             showError(NETWORK_ERROR);
@@ -343,7 +381,7 @@ export const LeagueDetailScreen = () => {
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.headerTitle}>{league.name}</Text>
-                            <Text style={styles.headerSubtitle}>Started: {formatDateOnly(league.start_date)}</Text>
+                            <Text style={styles.headerSubtitle}>{startLabel(league.start_date)}</Text>
                         </View>
                     </View>
                 </View>
@@ -380,7 +418,10 @@ export const LeagueDetailScreen = () => {
                                 {standings.map((s, index) => (
                                     <View key={s.id} style={styles.tableRow}>
                                         <Text style={[styles.tableCell, styles.colRank]}>{index + 1}</Text>
-                                        <Text style={[styles.tableCell, styles.colPlayer]}>{s.user.username}</Text>
+                                        <Text style={[styles.tableCell, styles.colPlayer]} numberOfLines={1}>
+                                            {s.user.username}
+                                            {isAdjusted(s) && <Text style={styles.editedTag}> · edited</Text>}
+                                        </Text>
                                         <Text style={[styles.tableCell, styles.colPoints]}>{s.points}</Text>
                                         <Text style={[styles.tableCell, styles.colOMW]}>{(s.omw_percentage * 100).toFixed(1)}%</Text>
                                         <Text style={[styles.tableCell, styles.colRecord]}>
@@ -388,10 +429,10 @@ export const LeagueDetailScreen = () => {
                                         </Text>
                                         {isOwner && (
                                             <View style={[styles.colActions, { flexDirection: 'row', gap: 8 }]}>
-                                                <TouchableOpacity onPress={() => openEditStanding(s)}>
+                                                <TouchableOpacity onPress={() => openEditStanding(s)} accessibilityLabel={`Edit standing for ${s.user.username}`}>
                                                     <Edit2 size={16} color="#a855f7" />
                                                 </TouchableOpacity>
-                                                <TouchableOpacity onPress={() => handleRemoveMember(s.user.id, s.user.username)}>
+                                                <TouchableOpacity onPress={() => handleRemoveMember(s.user.id, s.user.username)} accessibilityLabel={`Remove ${s.user.username}`}>
                                                     <Trash2 size={16} color="#ef4444" />
                                                 </TouchableOpacity>
                                             </View>
@@ -402,13 +443,33 @@ export const LeagueDetailScreen = () => {
                         )}
                     </View>
 
+                    {/* Tournaments that count toward the standings */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Tournaments</Text>
+                        {league.tournaments?.length ? league.tournaments.map(t => (
+                            <TouchableOpacity key={t.id} style={styles.tournamentRow} onPress={() => navigation.navigate('TournamentDetail', { id: t.id })}>
+                                <Trophy size={16} color="#a855f7" />
+                                <Text style={styles.tournamentName} numberOfLines={1}>{t.name}</Text>
+                                <Text style={styles.tournamentStatus}>{t.status}</Text>
+                            </TouchableOpacity>
+                        )) : (
+                            <Text style={styles.emptyText}>No tournaments yet. Their results will count toward the standings.</Text>
+                        )}
+                    </View>
+
                     {/* Admin Actions */}
+                    {isOwner && <JoinRequests kind="leagues" id={id} onApproved={fetchLeagueDetails} />}
                     {isOwner && (
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Admin Actions</Text>
                             <TouchableOpacity style={styles.addButton} onPress={() => setAddMemberModalVisible(true)}>
                                 <UserPlus size={20} color="white" />
                                 <Text style={styles.addButtonText}>Add Member</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('CreateTournament', { leagueId: id })}>
+                                <Plus size={20} color="white" />
+                                <Text style={styles.addButtonText}>New League Tournament</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteLeague}>
@@ -451,14 +512,7 @@ export const LeagueDetailScreen = () => {
                                 onChange={setNewMemberId}
                             />
                             <Text style={styles.modalLabel}>Or type a username, email or user ID</Text>
-                            <TextInput
-                                style={styles.modalInput}
-                                value={newMemberId}
-                                onChangeText={setNewMemberId}
-                                placeholder="Enter username or user ID"
-                                placeholderTextColor="#666"
-                                autoCapitalize="none"
-                            />
+                            <PlayerSearch inputStyle={styles.modalInput} value={newMemberId} onChange={setNewMemberId} />
 
                             <TouchableOpacity
                                 style={[styles.modalButton, addingMember && styles.modalButtonDisabled]}
@@ -481,11 +535,15 @@ export const LeagueDetailScreen = () => {
                         <ScrollView contentContainerStyle={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Edit Standing - {editingUser?.username}</Text>
+                                    <Text style={styles.modalTitle}>Edit Standing - {editingUser?.user.username}</Text>
                                     <TouchableOpacity onPress={() => setEditStandingModalVisible(false)}>
                                         <X size={24} color="white" />
                                     </TouchableOpacity>
                                 </View>
+
+                                <Text style={styles.modalHint}>
+                                    Totals come from league tournaments. A change here is kept as a correction, and new results still add to it.
+                                </Text>
 
                                 <Text style={styles.modalLabel}>Points</Text>
                                 <TextInput
@@ -548,6 +606,12 @@ export const LeagueDetailScreen = () => {
                                         <Text style={styles.modalButtonText}>Update Standing</Text>
                                     )}
                                 </TouchableOpacity>
+
+                                {editingUser && isAdjusted(editingUser) && (
+                                    <TouchableOpacity style={styles.secondaryButton} onPress={handleUseResultsOnly} disabled={editingStanding}>
+                                        <Text style={styles.secondaryButtonText}>Use results only (remove corrections)</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </ScrollView>
                     </View>
@@ -646,8 +710,8 @@ const styles = StyleSheet.create({
     colPlayer: { flex: 1 },
     colPoints: { width: 40, textAlign: 'center', fontWeight: 'bold' },
     colOMW: { width: 60, textAlign: 'center' },
-    colRecord: { width: 60, textAlign: 'right' },
-    colActions: { width: 70, alignItems: 'center', justifyContent: 'center' },
+    colRecord: { width: 60, textAlign: 'center' },
+    colActions: { width: 70, alignItems: 'center', justifyContent: 'center', textAlign: 'center' },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -695,32 +759,51 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 16,
     },
-    modalBackdrop: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalContent: {
-        backgroundColor: '#1a1a2e',
-        width: '90%',
-        maxWidth: 400,
-        borderRadius: 12,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: '#2e1065',
-    },
+    modalBackdrop: modalStyles.overlay,
+    modalContent: modalStyles.card,
     modalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 20,
     },
-    modalTitle: {
-        color: 'white',
-        fontSize: 20,
+    modalTitle: { ...modalStyles.title, flex: 1 },
+    modalHint: {
+        color: '#aaa',
+        fontSize: 13,
+        marginBottom: 16,
+    },
+    secondaryButton: {
+        marginTop: 12,
+        padding: 12,
+        alignItems: 'center',
+    },
+    secondaryButtonText: {
+        color: '#a855f7',
         fontWeight: 'bold',
+    },
+    editedTag: {
+        color: '#a855f7',
+        fontSize: 11,
+        fontWeight: 'normal',
+    },
+    tournamentRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#2e1065',
+    },
+    tournamentName: {
+        color: 'white',
+        fontSize: 15,
         flex: 1,
+    },
+    tournamentStatus: {
+        color: '#888',
+        fontSize: 12,
+        textTransform: 'uppercase',
     },
     modalLabel: {
         color: '#aaa',

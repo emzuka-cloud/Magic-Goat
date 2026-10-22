@@ -5,9 +5,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { API_URL } from '../config';
 import { showApiError, showError, NETWORK_ERROR } from '../utils/errors';
-import { formatDateOnly } from '../utils/dates';
+import { startLabel } from '../utils/dates';
 import { getAuthToken } from '../contexts/AuthContext';
 import { ArrowLeft, Plus, Users } from 'lucide-react-native';
+import { JoinWithCode } from '../components/JoinWithCode';
 
 interface League {
     id: string;
@@ -76,7 +77,7 @@ export const LeagueListScreen = () => {
                 <Text style={styles.name}>{item.name}</Text>
             </View>
             {item.description && <Text style={styles.description} numberOfLines={2}>{item.description}</Text>}
-            <Text style={styles.date}>Starts: {formatDateOnly(item.start_date)}</Text>
+            <Text style={styles.date}>{startLabel(item.start_date)}</Text>
         </TouchableOpacity>
     );
 
@@ -111,6 +112,16 @@ export const LeagueListScreen = () => {
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>Leagues</Text>
                     </View>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <JoinWithCode kind="leagues" />
+                        <TouchableOpacity
+                            style={styles.createButton}
+                            onPress={() => navigation.navigate('CreateLeague')}
+                            accessibilityLabel="Create league"
+                        >
+                            <Plus size={24} color="white" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {leagues.length === 0 ? (
@@ -130,13 +141,6 @@ export const LeagueListScreen = () => {
                         }
                     />
                 )}
-
-                <TouchableOpacity
-                    style={styles.fab}
-                    onPress={() => navigation.navigate('CreateLeague')}
-                >
-                    <Plus size={24} color="white" />
-                </TouchableOpacity>
             </SafeAreaView>
         </View>
     );
@@ -218,20 +222,13 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
     },
-    fab: {
-        position: 'absolute',
-        right: 20,
-        bottom: 20,
+    createButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: '#a855f7',
-        width: 56,
-        height: 56,
-        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 4,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
     },
 });

@@ -6,10 +6,11 @@ import { League } from './entities/league.entity';
 import { LeagueParticipant } from './entities/league-participant.entity';
 import { Tournament } from '../tournaments/entities/tournament.entity';
 import { Pairing } from '../tournaments/entities/pairing.entity';
+import { JoinRequestsModule } from '../join-requests/join-requests.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([League, LeagueParticipant, Tournament, Pairing]), NotificationsModule],
+    imports: [TypeOrmModule.forFeature([League, LeagueParticipant, Tournament, Pairing]), NotificationsModule, JoinRequestsModule],
     controllers: [LeaguesController],
     providers: [LeaguesService],
 })

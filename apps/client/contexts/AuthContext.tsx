@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { signIn, signUp, signOut, getCurrentUser, fetchAuthSession, signInWithRedirect } from 'aws-amplify/auth';
 import { API_URL } from '../config';
 import { apiErrorMessage } from '../utils/errors';
+import { storage } from '../utils/storage';
 
 interface AuthContextType {
     user: any | null;
@@ -89,6 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleSignOut = async () => {
         try {
             await signOut();
+            await storage.clearUserData();
             setUser(null);
         } catch (error: any) {
             throw new Error(error.message || 'Sign out failed');

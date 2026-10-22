@@ -16,7 +16,10 @@ export class NotificationsService {
         title: string,
         message: string,
         relatedEntityId?: string,
-    ): Promise<Notification> {
+        actorId?: string,
+    ): Promise<Notification | null> {
+        // Nobody needs to be told about something they just did themselves.
+        if (actorId && actorId === userId) return null;
         const notification = this.notificationsRepository.create({
             userId,
             type,

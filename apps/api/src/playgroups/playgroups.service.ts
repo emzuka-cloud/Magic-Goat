@@ -34,6 +34,15 @@ export class PlayGroupsService {
         if (group.ownerId !== userId) throw new ForbiddenException('Only the play group owner can do this.');
     }
 
+    /** Owner or member; returns the group so callers don't load it twice. */
+    async assertCanView(groupId: string, userId: string): Promise<PlayGroup> {
+        const group = await this.findOne(groupId);
+        if (group.ownerId !== userId && !group.members?.some((m) => m.id === userId)) {
+            throw new ForbiddenException('You are not part of this play group.');
+        }
+        return group;
+    }
+
     async findAllForUser(identifier: string): Promise<PlayGroup[]> {
         let user: User | null = null;
 
@@ -110,6 +119,7 @@ export class PlayGroupsService {
                 'Added to Play Group',
                 `You have been added to the play group "${group.name}"`,
                 group.id,
+                group.ownerId, // only the owner can add people
             );
 
             return savedGroup;

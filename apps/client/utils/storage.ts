@@ -31,7 +31,9 @@ export const storage = {
 
     async queueMutation(mutation: Omit<PendingMutation, 'id' | 'timestamp'>): Promise<void> {
         try {
-            const mutations = await this.getPendingMutations();
+            // A newer result for the same match replaces the queued one.
+            const mutations = (await this.getPendingMutations()).filter(m =>
+                !(mutation.type === 'report_result' && m.type === 'report_result' && m.payload?.pairingId === mutation.payload?.pairingId));
             const newMutation: PendingMutation = {
                 ...mutation,
                 id: `${Date.now()}_${Math.random()}`,
@@ -61,6 +63,16 @@ export const storage = {
             await AsyncStorage.setItem(MUTATIONS_KEY, JSON.stringify(filtered));
         } catch (error) {
             console.error('Failed to clear mutation:', error);
+        }
+    },
+
+    /** On sign-out: cached tournaments and queued changes belong to that account, not the next one. */
+    async clearUserData(): Promise<void> {
+        try {
+            const keys = await AsyncStorage.getAllKeys();
+            await AsyncStorage.multiRemove(keys.filter(k => k.startsWith(TOURNAMENT_PREFIX) || k === MUTATIONS_KEY));
+        } catch (error) {
+            console.error('Failed to clear offline data:', error);
         }
     },
 

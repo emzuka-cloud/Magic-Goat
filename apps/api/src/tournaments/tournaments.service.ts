@@ -3,14 +3,25 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tournament, TournamentFormat, TournamentStatus } from './entities/tournament.entity';
 import { TournamentParticipant } from './entities/participant.entity';
-import { Pairing, PairingResult } from './entities/pairing.entity';
+import { Pairing, PairingResult, resultSeats, seatsResult } from './entities/pairing.entity';
 import { Invitation, InvitationStatus } from './entities/invitation.entity';
 import { User } from '../users/entities/user.entity';
 import { EventsGateway } from '../events/events.gateway';
 import { PlayGroup } from '../playgroups/playgroups.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+import { League } from '../leagues/entities/league.entity';
+import { LeagueParticipant } from '../leagues/entities/league-participant.entity';
+import { CreateTournamentDto } from './dto';
+import { JoinRequestsService } from '../join-requests/join-requests.service';
 
+
+/** Quote a CSV field, and stop spreadsheets from running user text (e.g. a username "=HYPERLINK(...)") as a formula. */
+export function csvCell(value: unknown): string {
+    let s = String(value ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+}
 
 @Injectable()
 export class TournamentsService {
@@ -29,12 +40,78 @@ export class TournamentsService {
         private usersRepository: Repository<User>,
         private eventsGateway: EventsGateway,
         private notificationsService: NotificationsService,
+        @InjectRepository(League)
+        private leaguesRepository: Repository<League>,
+        @InjectRepository(LeagueParticipant)
+        private leagueParticipantsRepository: Repository<LeagueParticipant>,
+        private joinRequests: JoinRequestsService,
     ) { }
+
+    /** Anyone with the tournament's code can ask to join; the owner approves or declines. */
+    async requestToJoin(tournamentId: string, user: User) {
+        const tournament = await this.findOne(tournamentId);
+        if (tournament.created_by?.id === user.id || tournament.participants?.some((p) => p.user?.id === user.id)) {
+            throw new BadRequestException('You are already in this tournament.');
+        }
+        this.assertOpenForJoining(tournament);
+        const { request, created } = await this.joinRequests.request({ tournament: { id: tournamentId } }, user);
+        if (created && tournament.created_by) {
+            await this.notificationsService.create(
+                tournament.created_by.id,
+                NotificationType.TOURNAMENT_JOIN_REQUEST,
+                'Join request',
+                `${user.username} asked to join "${tournament.name}"`,
+                tournament.id,
+            );
+        }
+        return { id: request.id, status: request.status, tournament: { id: tournament.id, name: tournament.name } };
+    }
+
+    async pendingJoinRequests(tournamentId: string) {
+        const requests = await this.joinRequests.pending({ tournament: { id: tournamentId } });
+        return requests.map((r) => ({ id: r.id, created_at: r.created_at, user: { id: r.user.id, username: r.user.username } }));
+    }
+
+    async answerJoinRequest(tournamentId: string, requestId: string, approve: boolean) {
+        const tournament = await this.findOne(tournamentId);
+        const request = await this.joinRequests.decide(requestId, { tournament: { id: tournamentId } }, approve, async (r) => {
+            if (!approve) return;
+            this.assertOpenForJoining(tournament);
+            await this.addParticipant(tournamentId, r.user.id); // checks capacity and tells them they're in
+        });
+        if (!approve) {
+            await this.notificationsService.create(
+                request.user.id,
+                NotificationType.JOIN_DECLINED,
+                'Join request declined',
+                `Your request to join "${tournament.name}" was declined.`,
+                tournament.id,
+            );
+        }
+        return { id: request.id, status: request.status };
+    }
+
+    private assertOpenForJoining(tournament: Tournament) {
+        if (tournament.status !== TournamentStatus.UPCOMING) throw new BadRequestException('This tournament has already started.');
+        if ((tournament.participants?.length ?? 0) >= tournament.capacity) throw new BadRequestException('This tournament is full.');
+    }
 
     async assertOwner(tournamentId: string, userId: string): Promise<void> {
         const tournament = await this.tournamentsRepository.findOne({ where: { id: tournamentId }, relations: ['created_by'] });
         if (!tournament) throw new NotFoundException(`Tournament with ID ${tournamentId} not found`);
         if (tournament.created_by?.id !== userId) throw new ForbiddenException('Only the tournament owner can do this.');
+    }
+
+    /** Owner or participant; returns the tournament so callers don't load it twice. */
+    async assertCanView(tournamentId: string, userId: string): Promise<Tournament> {
+        const tournament = await this.findOne(tournamentId);
+        const isMember = tournament.participants?.some((p) => p.user?.id === userId);
+        if (tournament.created_by?.id === userId || isMember) return tournament;
+        // A league's members can follow every tournament that counts for that league.
+        if (tournament.league && (tournament.league.created_by?.id === userId || await this.leagueParticipantsRepository.exists({
+            where: { league: { id: tournament.league.id }, user: { id: userId } },
+        }))) return tournament;
+        throw new ForbiddenException('You are not part of this tournament.');
     }
 
     async addParticipant(tournamentId: string, identifier: string): Promise<TournamentParticipant> {
@@ -90,6 +167,7 @@ export class TournamentsService {
             'Added to Tournament',
             `You have been added to the tournament "${tournament.name}"`,
             tournament.id,
+            tournament.created_by?.id, // only the owner can add people
         );
 
         return savedParticipant;
@@ -120,10 +198,28 @@ export class TournamentsService {
         await this.tournamentsRepository.delete(id);
     }
 
-    async create(createTournamentDto: { name: string; format: TournamentFormat; capacity?: number }, user: User): Promise<Tournament> {
+    private async ownedLeague(leagueId: string, userId: string): Promise<League> {
+        const league = await this.leaguesRepository.findOne({ where: { id: leagueId }, relations: ['created_by'] });
+        if (!league) throw new NotFoundException('That league was not found.');
+        if (league.created_by?.id !== userId) throw new ForbiddenException('You can only add tournaments to leagues you own.');
+        return league;
+    }
+
+    /** Move a tournament into one of the caller's leagues, or out of its league (leagueId null). */
+    async setLeague(tournamentId: string, leagueId: string | null | undefined, userId: string): Promise<Tournament> {
+        const league = leagueId ? await this.ownedLeague(leagueId, userId) : null;
+        const tournament = await this.findOne(tournamentId);
+        tournament.league = league;
+        await this.tournamentsRepository.save(tournament);
+        return this.findOne(tournamentId);
+    }
+
+    async create({ leagueId, ...createTournamentDto }: CreateTournamentDto, user: User): Promise<Tournament> {
+        const league = leagueId ? await this.ownedLeague(leagueId, user.id) : null;
         const tournament = this.tournamentsRepository.create({
             ...createTournamentDto,
             created_by: user,
+            league,
             // If capacity is passed, use it, otherwise format might need mapping or default
             capacity: createTournamentDto.capacity || 8
         });
@@ -143,7 +239,7 @@ export class TournamentsService {
     }
 
     async findOne(id: string): Promise<Tournament> {
-        const tournament = await this.tournamentsRepository.findOne({ where: { id }, relations: ['created_by', 'participants', 'participants.user'] });
+        const tournament = await this.tournamentsRepository.findOne({ where: { id }, relations: ['created_by', 'participants', 'participants.user', 'league', 'league.created_by'] });
         if (!tournament) {
             throw new NotFoundException(`Tournament with ID ${id} not found`);
         }
@@ -192,6 +288,7 @@ export class TournamentsService {
                     'Added to Tournament',
                     `You have been added to the tournament "${tournament.name}" via your playgroup`,
                     tournament.id,
+                    tournament.created_by?.id,
                 );
             }
         }
@@ -215,7 +312,7 @@ export class TournamentsService {
     async getPairings(tournamentId: string): Promise<Pairing[]> {
         return this.pairingsRepository.find({
             where: { tournament: { id: tournamentId } },
-            relations: ['player1', 'player2'],
+            relations: ['player1', 'player2', 'player3', 'player4'], // seats 3-4: Commander pods
             order: { round: 'DESC' },
         });
     }
@@ -225,8 +322,60 @@ export class TournamentsService {
      * feeder match with nobody in it) and move every decided winner into the next round.
      */
     // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    /**
+     * Commander: pods of up to 4. Every pod except the final sends 2 players on (even pods fill seats 1-2
+     * of the next pod, odd pods seats 3-4); the final crowns 1. A pod that can never hold more players than
+     * it sends on is decided automatically (a short pod's players just move on).
+     */
+    // ponytail: reloads the whole bracket on each call; fine for the 8/16/32-player sizes offered.
+    private async resolveCommanderPods(tournamentId: string): Promise<void> {
+        const pairings = await this.pairingsRepository.find({
+            where: { tournament: { id: tournamentId } },
+            relations: ['player1', 'player2', 'player3', 'player4'],
+            order: { round: 'ASC', order: 'ASC' },
+        });
+        if (!pairings.length) return;
+        const lastRound = Math.max(...pairings.map(p => p.round));
+        const at = (round: number, order: number) => pairings.find(p => p.round === round && p.order === order);
+        const seats = (p: Pairing) => [p.player1, p.player2, p.player3, p.player4];
+        const sends = (p: Pairing) => (p.round === lastRound ? 1 : 2);
+        const decided = (p: Pairing) => p.result !== PairingResult.PENDING;
+        const pendingFeeders = (p: Pairing) => p.round === 1 ? [] :
+            [at(p.round - 1, p.order * 2), at(p.round - 1, p.order * 2 + 1)].filter((f): f is Pairing => !!f && !decided(f));
+        // Most players a pod can still send on / still receive.
+        const maxOut = (p: Pairing): number => decided(p) ? resultSeats(p.result).length : Math.min(sends(p), maxIn(p));
+        const maxIn = (p: Pairing): number => seats(p).filter(Boolean).length + pendingFeeders(p).reduce((n, f) => n + maxOut(f), 0);
+
+        const changed = new Set<Pairing>();
+        for (const p of pairings) {
+            if (!decided(p)) {
+                const filled = seats(p).map((u, i) => (u ? i + 1 : 0)).filter(Boolean);
+                const nobodyElseComing = pendingFeeders(p).every(f => maxOut(f) === 0);
+                if (filled.length && filled.length <= sends(p) && nobodyElseComing) {
+                    p.result = seatsResult(filled);
+                    changed.add(p);
+                }
+            }
+            const next = at(p.round + 1, Math.floor(p.order / 2));
+            if (!next || !decided(p)) continue;
+            const winners = resultSeats(p.result).map(i => seats(p)[i - 1]).filter(Boolean);
+            const slots = p.order % 2 === 0 ? (['player1', 'player2'] as const) : (['player3', 'player4'] as const);
+            slots.forEach((slot, k) => {
+                const want = winners[k] ?? null;
+                if ((next[slot]?.id ?? null) !== (want?.id ?? null)) {
+                    next[slot] = want as User;
+                    changed.add(next);
+                }
+            });
+        }
+        if (changed.size) await this.pairingsRepository.save([...changed]);
+
+        const final = at(lastRound, 0);
+        await this.tournamentsRepository.update(tournamentId, { status: final && decided(final) ? TournamentStatus.COMPLETED : TournamentStatus.ACTIVE });
+    }
+
     private async resolveByes(tournamentId: string, format: TournamentFormat): Promise<void> {
-        if (format === TournamentFormat.COMMANDER) return; // ponytail: 4-player pods advance 2 players; not handled here
+        if (format === TournamentFormat.COMMANDER) return this.resolveCommanderPods(tournamentId);
         const pairings = await this.pairingsRepository.find({
             where: { tournament: { id: tournamentId } },
             relations: ['player1', 'player2'],
@@ -469,7 +618,16 @@ export class TournamentsService {
             throw new NotFoundException('This match was not found in this tournament.');
         }
 
-        if (pairing.tournament.format !== TournamentFormat.COMMANDER) {
+        if (pairing.tournament.format === TournamentFormat.COMMANDER) {
+            // The final crowns one player; every other pod sends two on.
+            const isFinal = !pairing.next_pairing;
+            const chosen = [...new Set(resultSeats(result))];
+            const podSeats = [pairing.player1, pairing.player2, pairing.player3, pairing.player4];
+            if (chosen.length !== (isFinal ? 1 : 2) || chosen.some(seat => !podSeats[seat - 1])) {
+                throw new BadRequestException(isFinal ? 'Pick the one winner of the final.' : 'Pick the two players who move on from this pod.');
+            }
+            result = seatsResult(chosen);
+        } else {
             if (result !== PairingResult.P1_WIN && result !== PairingResult.P2_WIN) {
                 throw new BadRequestException('A match result must be a win for player 1 or player 2.');
             }
@@ -483,28 +641,8 @@ export class TournamentsService {
 
         // Advance Winner
         if (pairing.next_pairing) {
-            const isCommander = pairing.tournament.format === TournamentFormat.COMMANDER;
-
-            if (isCommander) {
-                const winners: User[] = [];
-                if (result.includes('p1') && pairing.player1) winners.push(pairing.player1);
-                if (result.includes('p2') && pairing.player2) winners.push(pairing.player2);
-                if (result.includes('p3') && pairing.player3) winners.push(pairing.player3);
-                if (result.includes('p4') && pairing.player4) winners.push(pairing.player4);
-
-                if (winners.length === 2) {
-                    const isEvenOrder = pairing.order % 2 === 0;
-                    if (isEvenOrder) {
-                        pairing.next_pairing.player1 = winners[0];
-                        pairing.next_pairing.player2 = winners[1];
-                    } else {
-                        pairing.next_pairing.player3 = winners[0];
-                        pairing.next_pairing.player4 = winners[1];
-                    }
-                    await this.pairingsRepository.save(pairing.next_pairing);
-                    this.eventsGateway.server.to(`tournament_${pairing.tournament.id}`).emit('pairing_updated', pairing.next_pairing);
-                }
-            } else if (result === 'p1_win' || result === 'p2_win') {
+            // Commander pods move on in resolveCommanderPods (called below).
+            if (pairing.tournament.format !== TournamentFormat.COMMANDER && (result === 'p1_win' || result === 'p2_win')) {
                 const winner = result === 'p1_win' ? pairing.player1 : pairing.player2;
                 const isPlayer1Slot = pairing.order % 2 === 0;
 
@@ -606,22 +744,24 @@ export class TournamentsService {
             })),
         };
 
+        // Goes into a Content-Disposition header: keep it to safe ASCII so a name can't break or inject headers.
+        const baseName = tournament.name.replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 80) || 'tournament';
         if (format === 'json') {
             return {
                 data: JSON.stringify(exportData, null, 2),
                 contentType: 'application/json',
-                filename: `${tournament.name.replace(/\s+/g, '_')}_export.json`,
+                filename: `${baseName}_export.json`,
             };
         } else {
             // CSV format: one row per pairing
             const csvLines = ['Round,Player 1,Player 2,Result'];
             for (const pairing of exportData.pairings) {
-                csvLines.push(`${pairing.round},${pairing.player1},${pairing.player2},${pairing.result}`);
+                csvLines.push([pairing.round, pairing.player1, pairing.player2, pairing.result].map(csvCell).join(','));
             }
             return {
                 data: csvLines.join('\n'),
                 contentType: 'text/csv',
-                filename: `${tournament.name.replace(/\s+/g, '_')}_export.csv`,
+                filename: `${baseName}_export.csv`,
             };
         }
     }

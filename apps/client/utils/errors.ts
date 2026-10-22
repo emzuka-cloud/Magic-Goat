@@ -24,9 +24,13 @@ export async function apiErrorMessage(res: Response, fallback: string): Promise<
 }
 
 // Alert.alert is a no-op on react-native-web, so fall back to window.alert there.
-export function showError(message: string, title = 'Error') {
+export function showMessage(title: string, message: string) {
     if (Platform.OS === 'web') window.alert(message);
     else Alert.alert(title, message);
+}
+
+export function showError(message: string, title = 'Error') {
+    showMessage(title, message);
 }
 
 export async function showApiError(res: Response, fallback: string) {
@@ -34,3 +38,15 @@ export async function showApiError(res: Response, fallback: string) {
 }
 
 export const NETWORK_ERROR = 'Could not reach the server. Check your connection and try again.';
+
+/** Ask before a destructive action. Alert.alert buttons do nothing on web, so use window.confirm there. */
+export function confirmAction(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
+    if (Platform.OS === 'web') {
+        if (window.confirm(message)) onConfirm();
+        return;
+    }
+    Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: confirmLabel, style: 'destructive', onPress: onConfirm },
+    ]);
+}
